@@ -30,9 +30,7 @@ namespace sc::pdflite {
         explicit svg(sc::drawing drawing);
 
         // Its page's size, in the drawing's units (CSS pixels for an SVG).
-        [[nodiscard]] double width() const override;
-
-        [[nodiscard]] double height() const override;
+        [[nodiscard]] sc::size size() const override;
 
         [[nodiscard]] const sc::drawing &drawing() const { return *drawing_; }
 

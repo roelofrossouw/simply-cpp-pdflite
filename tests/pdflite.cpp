@@ -366,8 +366,8 @@ int main() {
             return bytes + std::string{"\xFF\xD9", 2};
         };
         const auto rgb = jpeg(header(0xC0, 8, 480, 640, 3));
-        CHECK_EQ(rgb.width(), 640);
-        CHECK_EQ(rgb.height(), 480);
+        CHECK_EQ(rgb.size().width(), 640);
+        CHECK_EQ(rgb.size().height(), 480);
         CHECK_EQ(rgb.components(), 3);
         CHECK_EQ(jpeg(header(0xC2, 8, 10, 20, 1)).components(), 1); // progressive, grey
         CHECK_EQ(jpeg(header(0xC0, 8, 10, 20, 4, true)).components(), 4); // Adobe CMYK
@@ -396,8 +396,8 @@ int main() {
     const auto images_file = output() / "images.pdf";
     {
         const auto photo = jpeg::load(SC_PDFLITE_TEST_PHOTO);
-        CHECK_EQ(photo.width(), 960);
-        CHECK_EQ(photo.height(), 640);
+        CHECK_EQ(photo.size().width(), 960);
+        CHECK_EQ(photo.size().height(), 640);
         document pdf{images_file, sc::page_size::A4};
         auto &page = pdf.page_content();
         const auto name = pdf.image(photo);
@@ -447,8 +447,8 @@ int main() {
         for (const char *name: {"rgb8", "rgb16", "grey1", "grey4", "palette4", "rgba8", "grey-alpha16", "palette-alpha", "grey-key",
                                 "rgb-interlaced", "rgba-interlaced"}) {
             const auto picture = png::load(folder / (std::string{name} + ".png"));
-            CHECK_EQ(picture.width(), 7.0);
-            CHECK_EQ(picture.height(), 5.0);
+            CHECK_EQ(picture.size().width(), 7.0);
+            CHECK_EQ(picture.size().height(), 5.0);
             pdf.page_content().draw(pdf.image(picture), sc::rect{20, y, 70, 50});
             pictures.emplace(name, picture);
             y += 60;
@@ -529,8 +529,8 @@ int main() {
             <image x="160" y="60" width="35" height="25" href="data:image/png;base64,)svg" + picture + R"svg("/>
         </svg>)svg";
         const auto drawing = svg::parse(text);
-        CHECK_EQ(drawing.width(), 200.0);
-        CHECK_EQ(drawing.height(), 100.0);
+        CHECK_EQ(drawing.size().width(), 200.0);
+        CHECK_EQ(drawing.size().height(), 100.0);
         document pdf{svg_file, sc::page_size::A4};
         const auto name = pdf.image(drawing);
         CHECK_EQ(name, std::string{"Fm1"});
