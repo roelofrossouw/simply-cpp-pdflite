@@ -1,4 +1,7 @@
-#include "pdflite.h"
+#include "pdflite/content.h"
+
+#include "pdflite/object.h"
+
 #include <stdexcept>
 #include <string>
 
