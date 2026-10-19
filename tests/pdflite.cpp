@@ -283,6 +283,38 @@ int main() {
         CHECK(contains(streams, "(Page three) Tj"));
     }
 
+    SECTION("Distances: millimetres and inches, written as points");
+    const auto units_file = output() / "units.pdf";
+    {
+        document pdf{units_file, sc::mm(210), sc::mm(297)}; // A4 to the millimetre
+        CHECK_NEAR(pdf.width(), 595.2756, 1e-4);
+        auto &page = pdf.page_content();
+        page.line_width(sc::mm(0.5));
+        page.rectangle(sc::mm(10), sc::mm(10), sc::inch(1), 72); // mixed with a plain number of points
+        page.stroke();
+        const auto font = pdf.standard_font("Helvetica");
+        page.begin_text();
+        page.font(font, sc::mm(5));
+        page.text_position(sc::inch(1), sc::inch(1));
+        page.show("An inch in");
+        page.end_text();
+        pdf.link(sc::rect{sc::mm(10), sc::mm(10), sc::inch(1), 72}, "https://example.com");
+        pdf.bookmark("A centimetre down", 1, sc::mm(10));
+        pdf.close();
+    }
+    {
+        const auto file = read(units_file);
+        CHECK(structure_problem(file).empty());
+        CHECK(contains(file, "/MediaBox [0 0 595.2756 841.8898]"));
+        CHECK(contains(file, "/Rect [28.3465 741.5433 100.3465 813.5433]")); // 841.8898 - 28.3465 - 72 and up
+        CHECK(contains(file, "/XYZ 0 813.5433 null]"));
+        const auto streams = inflated_streams(file);
+        CHECK(contains(streams, "1.4173 w"));                          // 0.5 mm
+        CHECK(contains(streams, "28.3465 741.5433 72 72 re"));
+        CHECK(contains(streams, "/F1 14.1732 Tf"));                    // 5 mm
+        CHECK(contains(streams, "1 0 0 1 72 769.8898 Tm"));
+    }
+
     SECTION("Links and bookmarks");
     const auto links_file = output() / "links.pdf";
     {

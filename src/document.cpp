@@ -23,14 +23,14 @@ namespace sc::pdflite {
 
     namespace {
         // The path, once the page size is one readers can show (checked before the file is made).
-        const std::filesystem::path &checked(const std::filesystem::path &path, const double width, const double height) {
-            for (const double side: {width, height})
+        const std::filesystem::path &checked(const std::filesystem::path &path, const sc::distance width, const sc::distance height) {
+            for (const double side: {width.points(), height.points()})
                 if (!(side >= 3 && side <= 14400)) throw std::invalid_argument("sc::pdflite: a page side outside 3 to 14,400 points");
             return path;
         }
     }
 
-    document::document(const std::filesystem::path &path, const double width, const double height)
+    document::document(const std::filesystem::path &path, const sc::distance width, const sc::distance height)
         : file_(checked(path, width, height)), width_(width), height_(height) {
         pages_id_ = file_.allocate();
         add_page();
@@ -128,14 +128,14 @@ namespace sc::pdflite {
         pages_[current_].links.push_back({rect_of(where), string{ascii_uri(url)}, 0, 0});
     }
 
-    void document::link(const sc::rect &where, const std::size_t page, const double top) {
+    void document::link(const sc::rect &where, const std::size_t page, const sc::distance top) {
         check_open();
         if (page == 0) throw std::out_of_range("sc::pdflite: pages count from 1");
         number(top); // throws when it isn't finite
         pages_[current_].links.push_back({rect_of(where), std::nullopt, page, top});
     }
 
-    void document::bookmark(const std::string_view title, const std::size_t page, const double top, const int level) {
+    void document::bookmark(const std::string_view title, const std::size_t page, const sc::distance top, const int level) {
         check_open();
         if (page == 0) throw std::out_of_range("sc::pdflite: pages count from 1");
         number(top);
