@@ -37,11 +37,10 @@ namespace sc::pdflite {
     }
 
     namespace {
-        std::string rect_of(const area &where) {
-            for (const double side: {where.left, where.bottom, where.right, where.top})
-                if (!std::isfinite(side)) throw std::invalid_argument("sc::pdflite: an area that isn't finite");
+        array rect_of(const area &where) {
+            array rect{where.left, where.bottom, where.right, where.top}; // throws when one isn't finite
             if (where.right < where.left || where.top < where.bottom) throw std::invalid_argument("sc::pdflite: an inverted area");
-            return "[" + number(where.left) + " " + number(where.bottom) + " " + number(where.right) + " " + number(where.top) + "]";
+            return rect;
         }
 
         // A URI in 7-bit ASCII (12.6.4.7): bytes outside ! to ~ percent-encoded, as RFC 3986 has
@@ -60,6 +59,9 @@ namespace sc::pdflite {
             return out;
         }
     }
+
+    document::document(const std::filesystem::path &path, const sc::page_size paper, const sc::orientation turned)
+        : document(path, sc::page_dimensions(paper, turned).width(), sc::page_dimensions(paper, turned).height()) {}
 
     document::~document() {
         try {
@@ -117,31 +119,31 @@ namespace sc::pdflite {
         check_open();
         if (key.empty() || key == "CreationDate" || key == "ModDate" || key == "Trapped")
             throw std::invalid_argument("sc::pdflite: the information key " + std::string{key} + " can't be set");
-        info_[std::string{key}] = text_string(value);
+        info_.insert_or_assign(std::string{key}, string::text(value));
     }
 
     void document::link(const area &where, const std::string_view url) {
         check_open();
         if (url.empty()) throw std::invalid_argument("sc::pdflite: a link to an empty URI");
-        pages_[current_].links.push_back({rect_of(where), literal(ascii_uri(url)), 0, 0});
+        pages_[current_].links.push_back({rect_of(where), string{ascii_uri(url)}, 0, 0});
     }
 
     void document::link(const area &where, const std::size_t page, const double top) {
         check_open();
         if (page == 0) throw std::out_of_range("sc::pdflite: pages count from 1");
         number(top); // throws when it isn't finite
-        pages_[current_].links.push_back({rect_of(where), "", page, top});
+        pages_[current_].links.push_back({rect_of(where), std::nullopt, page, top});
     }
 
     void document::bookmark(const std::string_view title, const std::size_t page, const double top, const int level) {
         check_open();
         if (page == 0) throw std::out_of_range("sc::pdflite: pages count from 1");
         number(top);
-        outline_.push_back({text_string(title), page, top, std::max(0, level)});
+        outline_.push_back({string::text(title), page, top, std::max(0, level)});
     }
 
-    std::string document::destination(const std::size_t page, const double top) const {
-        return "[" + reference(pages_[page - 1].id) + " /XYZ 0 " + number(top) + " null]";
+    array document::destination(const std::size_t page, const double top) const {
+        return {reference{pages_[page - 1].id}, name{"XYZ"}, 0, top, nullptr};
     }
 
     std::uint32_t document::write_outline() {
@@ -163,20 +165,21 @@ namespace sc::pdflite {
         for (std::size_t i = 0; i < count; ++i) {
             const auto &siblings = children[parent[i]];
             const auto at = static_cast<std::size_t>(std::ranges::find(siblings, i) - siblings.begin());
-            std::string entry = "<< /Title " + outline_[i].title + " /Parent " + reference(parent[i] ? ids[*parent[i]] : root);
-            if (at > 0) entry += " /Prev " + reference(ids[siblings[at - 1]]);
-            if (at + 1 < siblings.size()) entry += " /Next " + reference(ids[siblings[at + 1]]);
+            dictionary entry{{"Title", outline_[i].title}, {"Parent", reference{parent[i] ? ids[*parent[i]] : root}}};
+            if (at > 0) entry.add("Prev", reference{ids[siblings[at - 1]]});
+            if (at + 1 < siblings.size()) entry.add("Next", reference{ids[siblings[at + 1]]});
             if (const auto found = children.find(i); found != children.end()) {
+                entry.add("First", reference{ids[found->second.front()]});
+                entry.add("Last", reference{ids[found->second.back()]});
                 // Closed: the count is negative, the number of children that opening it shows (12.3.3).
-                entry += " /First " + reference(ids[found->second.front()]) + " /Last " + reference(ids[found->second.back()]) +
-                         " /Count -" + std::to_string(found->second.size());
+                entry.add("Count", -static_cast<long long>(found->second.size()));
             }
-            entry += " /Dest " + destination(outline_[i].page, outline_[i].top) + " >>";
-            file_.object(ids[i], entry);
+            entry.add("Dest", destination(outline_[i].page, outline_[i].top));
+            file_.write(ids[i], entry);
         }
         const auto &top_level = children[std::nullopt];
-        file_.object(root, "<< /Type /Outlines /First " + reference(ids[top_level.front()]) + " /Last " + reference(ids[top_level.back()]) +
-                           " /Count " + std::to_string(top_level.size()) + " >>");
+        file_.write(root, dictionary{{"Type", name{"Outlines"}}, {"First", reference{ids[top_level.front()]}},
+                                     {"Last", reference{ids[top_level.back()]}}, {"Count", top_level.size()}});
         return root;
     }
 
@@ -188,55 +191,60 @@ namespace sc::pdflite {
                 throw std::logic_error("sc::pdflite: page " + std::to_string(i + 1) + "'s content isn't complete (an open q, text object or path)");
         for (const auto &page: pages_)
             for (const auto &each: page.links)
-                if (each.uri.empty() && each.page > pages_.size())
+                if (!each.uri && each.page > pages_.size())
                     throw std::out_of_range("sc::pdflite: a link to page " + std::to_string(each.page) + ", which isn't there");
         for (const auto &item: outline_)
             if (item.page > pages_.size()) throw std::out_of_range("sc::pdflite: a bookmark to page " + std::to_string(item.page) + ", which isn't there");
 
-        const std::string media_box = "[0 0 " + number(width_) + " " + number(height_) + "]";
-        std::string kids;
+        const array media_box{0, 0, width_, height_};
+        array kids;
         for (auto &page: pages_) {
             const std::uint32_t contents = file_.allocate();
-            file_.stream(contents, "", page.content.text());
-            std::string resources = "<<";
+            file_.write_stream(contents, {}, page.content.text());
+            dictionary resources;
             if (!page.fonts.empty()) {
-                resources += " /Font <<";
-                for (const auto &[base_font, resource]: page.fonts) resources += " " + name(resource) + " " + reference(fonts_.at(base_font));
-                resources += " >>";
+                dictionary fonts;
+                for (const auto &[base_font, resource]: page.fonts) fonts.add(resource, reference{fonts_.at(base_font)});
+                resources.add("Font", fonts);
             }
-            resources += " >>";
             // Link annotations (12.5.6.5): printed (/F 4), no border.
-            std::string annotations;
+            array annotations;
             for (const auto &each: page.links) {
                 const std::uint32_t id = file_.allocate();
-                const std::string target = each.uri.empty() ? " /Dest " + destination(each.page, each.top)
-                                                            : " /A << /Type /Action /S /URI /URI " + each.uri + " >>";
-                file_.object(id, "<< /Type /Annot /Subtype /Link /Rect " + each.rect + " /F 4 /Border [0 0 0]" + target + " >>");
-                annotations += (annotations.empty() ? "" : " ") + reference(id);
+                dictionary annotation{{"Type", name{"Annot"}}, {"Subtype", name{"Link"}}, {"Rect", each.rect}, {"F", 4},
+                                      {"Border", array{0, 0, 0}}};
+                if (each.uri) annotation.add("A", dictionary{{"Type", name{"Action"}}, {"S", name{"URI"}}, {"URI", *each.uri}});
+                else annotation.add("Dest", destination(each.page, each.top));
+                file_.write(id, annotation);
+                annotations.push_back(reference{id});
             }
-            file_.object(page.id, "<< /Type /Page /Parent " + reference(pages_id_) + " /MediaBox " + media_box +
-                                  " /Resources " + resources + " /Contents " + reference(contents) +
-                                  (annotations.empty() ? "" : " /Annots [" + annotations + "]") + " >>");
-            kids += (kids.empty() ? "" : " ") + reference(page.id);
+            dictionary entry{{"Type", name{"Page"}}, {"Parent", reference{pages_id_}}, {"MediaBox", media_box},
+                             {"Resources", resources}, {"Contents", reference{contents}}};
+            if (!annotations.empty()) entry.add("Annots", annotations);
+            file_.write(page.id, entry);
+            kids.push_back(reference{page.id});
             page.content = {}; // written: its text isn't needed any more
         }
-        file_.object(pages_id_, "<< /Type /Pages /Kids [" + kids + "] /Count " + std::to_string(pages_.size()) + " >>");
+        file_.write(pages_id_, dictionary{{"Type", name{"Pages"}}, {"Kids", kids}, {"Count", pages_.size()}});
 
         for (const auto &[base_font, id]: fonts_)
-            file_.object(id, "<< /Type /Font /Subtype /Type1 /BaseFont " + name(base_font) + " /Encoding /WinAnsiEncoding >>");
+            file_.write(id, dictionary{{"Type", name{"Font"}}, {"Subtype", name{"Type1"}}, {"BaseFont", name{base_font}},
+                                       {"Encoding", name{"WinAnsiEncoding"}}});
 
         const std::uint32_t outlines = write_outline();
         const std::uint32_t catalog = file_.allocate();
-        file_.object(catalog, "<< /Type /Catalog /Pages " + reference(pages_id_) +
-                              (outlines ? " /Outlines " + reference(outlines) + " /PageMode /UseOutlines" : std::string{}) + " >>");
+        dictionary root{{"Type", name{"Catalog"}}, {"Pages", reference{pages_id_}}};
+        if (outlines) root.add("Outlines", reference{outlines}).add("PageMode", name{"UseOutlines"});
+        file_.write(catalog, root);
 
-        const auto now = date(std::chrono::system_clock::now());
-        if (!info_.contains("Producer")) info_["Producer"] = text_string("simply-cpp-pdf");
-        std::string entries;
-        for (const auto &[key, value]: info_) entries += " " + name(key) + " " + value;
-        const std::uint32_t information = file_.allocate();
-        file_.object(information, "<<" + entries + " /CreationDate " + now + " /ModDate " + now + " >>");
+        const auto now = string::date(std::chrono::system_clock::now());
+        if (!info_.contains("Producer")) info_.insert_or_assign("Producer", string::text("simply-cpp-pdflite"));
+        dictionary information;
+        for (const auto &[key, value]: info_) information.add(key, value);
+        information.add("CreationDate", now).add("ModDate", now);
+        const std::uint32_t information_id = file_.allocate();
+        file_.write(information_id, information);
 
-        file_.finish(catalog, information);
+        file_.finish(catalog, information_id);
     }
 }

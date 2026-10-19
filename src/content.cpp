@@ -61,7 +61,7 @@ namespace sc::pdflite {
 
     void content::state(const std::string_view resource) {
         if (in_path_) throw std::logic_error("sc::pdflite: gs before the path is painted or ended");
-        op(name(resource) + " gs");
+        op(name{resource}.write() + " gs");
     }
 
     void content::path_step(const std::string_view what) {
@@ -135,7 +135,7 @@ namespace sc::pdflite {
 
     void content::font(const std::string_view resource, const double size) {
         if (in_path_) throw std::logic_error("sc::pdflite: Tf before the path is painted or ended");
-        op(name(resource) + " " + number(size) + " Tf");
+        op(name{resource}.write() + " " + number(size) + " Tf");
         font_set_ = true;
     }
 
@@ -147,6 +147,6 @@ namespace sc::pdflite {
     void content::show(const std::string_view bytes) {
         if (!in_text_) throw std::logic_error("sc::pdflite: Tj outside a text object (BT first)");
         if (!font_set_) throw std::logic_error("sc::pdflite: Tj before a font is set (Tf)");
-        op(literal(bytes) + " Tj");
+        op(string{std::string{bytes}}.write() + " Tj");
     }
 }

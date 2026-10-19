@@ -36,6 +36,7 @@ if (SC_PDFLITE_BUILD_TESTS)
 endif ()
 
 add_sc_example(sc-pdflite-demo)
+add_sc_example(sc-pdflite-links)
 
 package_sc_module(
         DEV_DEPENDS "simply-cpp-dev (>= 1.14.3~)" "simply-cpp-graphics-dev (>= 6.1.1~)" zlib1g-dev)

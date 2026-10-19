@@ -1,6 +1,8 @@
 #ifndef SC_PDFLITE_FILE_H
 #define SC_PDFLITE_FILE_H
 
+#include "object.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -21,22 +23,27 @@ namespace sc::pdflite {
         // The next object number, to write later (and refer to before then).
         std::uint32_t allocate();
 
-        // Writes object id: "id 0 obj", body, "endobj".
-        void object(std::uint32_t id, std::string_view body);
+        // Writes indirect object id (7.3.10): "id 0 obj", value, "endobj". Each allocated object
+        // is written once; throws std::logic_error otherwise.
+        void write(std::uint32_t id, const pdflite::object &value);
 
-        // Writes object id as a stream: dictionary holds its entries (without /Length or /Filter),
-        // and data is compressed with zlib (FlateDecode) when compress is set.
-        void stream(std::uint32_t id, std::string_view dictionary, std::string_view data, bool compress = true);
+        // Writes object id as a stream (7.3.8): its dictionary (which gets /Length, and /Filter
+        // /FlateDecode when data is compressed with zlib, as it is unless compress is false; throws
+        // std::invalid_argument when it already has either), then data.
+        void write_stream(std::uint32_t id, dictionary entries, std::string_view data, bool compress = true);
 
-        // Writes the cross-reference table and the trailer, naming root and info (0: none), and
-        // closes the file. Throws std::logic_error when an allocated object wasn't written, and
+        // Writes the cross-reference table and the trailer, naming the catalog (root) and the
+        // information dictionary (info, 0: none), and closes the file. Throws std::logic_error when an allocated object wasn't written, and
         // std::runtime_error when writing failed.
         void finish(std::uint32_t root, std::uint32_t info);
 
         [[nodiscard]] bool finished() const { return finished_; }
 
     private:
-        void write(std::string_view bytes);
+        void put(std::string_view bytes);
+
+        // Starts object id: checks it may be written and notes where it begins.
+        void start(std::uint32_t id);
 
         std::filesystem::path path_;
         std::ofstream out_;

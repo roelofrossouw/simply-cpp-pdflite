@@ -27,9 +27,11 @@ int main(int argc, char **argv) {
         sc::timer sw;
 
         // [readme]
-        sc::console::heading("A document of A4 pages (595.28 x 841.89 points)");
-        sc::pdflite::document pdf{output, 595.2756, 841.8898};
-        sc::console::step("sc::pdflite::document pdf{output, 595.2756, 841.8898};   // " + output.string());
+        sc::console::heading("A document of A4 pages: sc-graphics' paper sizes, or any size in points");
+        sc::pdflite::document pdf{output, sc::page_size::A4};
+        sc::console::step("sc::pdflite::document pdf{output, sc::page_size::A4};   // " + output.string());
+        SC_SHOW(pdf.width());  // points, 1/72 inch
+        SC_SHOW(pdf.height());
 
         sc::console::heading("Text: a built-in font, then BT ... ET");
         auto &page = pdf.page_content();
