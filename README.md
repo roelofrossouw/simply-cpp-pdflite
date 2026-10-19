@@ -28,12 +28,16 @@ What it writes so far:
   they're drawn: grey, RGB or CMYK (Adobe's inverted CMYK corrected), baseline or progressive;
   a JPEG PDF readers needn't read (lossless, arithmetic-coded, 12-bit) is refused. They're drawn
   into a `sc::rect`, or through any `sc::transform` of their unit square: mirrored, turned, scaled.
+- **PNG images** (`pdflite/png.h`): one without transparency that isn't interlaced (grey, RGB or a
+  palette, at any bit depth) is copied as it is, with PNG's own predictors; any other is decoded
+  with zlib (interlacing undone) and its transparency (an alpha channel, a palette's alphas or a
+  key colour) written as a soft mask. Each chunk's CRC and order are checked.
 - **Links:** an area of a page that opens a URI (written in 7-bit ASCII, percent-encoded), or
   goes to a page and a height on it, which needn't exist yet.
 - **Bookmarks:** the reader's outline, nested by level, with Unicode titles; the file opens with
   it showing.
 
-Still to come: PNG images, then embedded fonts through FreeType.
+Still to come: SVG drawings, then embedded fonts through FreeType.
 Values are checked as they're written: a number that isn't finite, a page side readers can't show
 (outside 3 to 14,400 points) or malformed UTF-8 throws `std::invalid_argument`.
 

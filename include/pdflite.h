@@ -8,7 +8,8 @@
 //   pdflite/file.h      the file: header, objects, cross-reference table, trailer
 //   pdflite/content.h   a page's content stream, which refuses what PDF forbids
 //   pdflite/resource.h  what pages use by name, written once: the base of image and the rest
-//   pdflite/image.h     pictures, drawn with content::draw(): the base of jpeg (pdflite/jpeg.h)
+//   pdflite/image.h     pictures, drawn with content::draw(): the base of jpeg (pdflite/jpeg.h) and
+//                       png (pdflite/png.h)
 //   pdflite/document.h  pages, fonts and the document's information
 // Positions are sc-graphics' canvas's: points from the page's top-left corner, y down (PDF's
 // own, y up from the bottom, are what gets written).
@@ -18,6 +19,7 @@
 #include "pdflite/resource.h"
 #include "pdflite/image.h"
 #include "pdflite/jpeg.h"
+#include "pdflite/png.h"
 #include "pdflite/document.h"
 
 #endif //SC_PDFLITE_H
