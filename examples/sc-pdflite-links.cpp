@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
         }
 
         sc::console::heading("A web link (link(area, url)): the address is written in ASCII, percent-encoded");
-        const auto site = write_line(pdf, sc::standard_font::face::helvetica, 11, 72, pdf.height() - 100, "simply-cpp on GitHub");
+        const auto site = write_line(pdf, sc::standard_font::face::helvetica, 11, 72, pdf.size().height() - 100, "simply-cpp on GitHub");
         SC_STEP(pdf.link(site, "https://github.com/roelofrossouw/simply-cpp"));
 
         sc::console::heading("Chapters, each with a way back to the contents");
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
             write_line(pdf, sc::standard_font::face::helvetica_bold, 20, 72, top, std::to_string(i + 1) + ". " + chapters[i]);
             write_line(pdf, sc::standard_font::face::times_roman, 12, 72, top + 40, "Section " + std::to_string(i + 1) + ".1");
             write_line(pdf, sc::standard_font::face::times_roman, 12, 72, top + 300, "Section " + std::to_string(i + 1) + ".2");
-            const auto back = write_line(pdf, sc::standard_font::face::helvetica, 10, 72, pdf.height() - 60, "Back to the contents");
+            const auto back = write_line(pdf, sc::standard_font::face::helvetica, 10, 72, pdf.size().height() - 60, "Back to the contents");
             pdf.link(back, 1); // the top of the contents page
         }
 

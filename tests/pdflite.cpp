@@ -192,7 +192,7 @@ int main() {
     SECTION("Every built-in font, on one page");
     const auto fonts_file = output() / "fonts.pdf";
     {
-        document pdf{fonts_file, 595.2756, 841.8898}; // any size in points: A4 to the hundredth of a millimetre
+        document pdf{fonts_file, {595.2756, 841.8898}}; // any size in points: A4 to the hundredth of a millimetre
         auto &page = pdf.page_content();
         double y = 42; // from the top
         for (const auto font: sc::standard_font::faces) {
@@ -289,8 +289,8 @@ int main() {
     SECTION("Distances: millimetres and inches, written as points");
     const auto units_file = output() / "units.pdf";
     {
-        document pdf{units_file, sc::dist::mm(210), sc::dist::mm(297)}; // A4 to the millimetre
-        CHECK_NEAR(pdf.width(), 595.2756, 1e-4);
+        document pdf{units_file, {sc::dist::mm(210), sc::dist::mm(297)}}; // A4 to the millimetre
+        CHECK_NEAR(pdf.size().width(), 595.2756, 1e-4);
         auto &page = pdf.page_content();
         page.line_width(sc::dist::mm(0.5));
         page.rectangle(sc::dist::mm(10), sc::dist::mm(10), sc::dist::inch(1), 72); // mixed with a plain number of points
@@ -322,20 +322,20 @@ int main() {
     const auto sizes_file = output() / "sizes.pdf";
     {
         document pdf{sizes_file, sc::page_size::A4};
-        CHECK_NEAR(pdf.width(), 595.2756, 1e-4);
+        CHECK_NEAR(pdf.size().width(), 595.2756, 1e-4);
         pdf.link(sc::rect{72, 72, 200, 20}, 2);            // to the top of page 2
         pdf.add_page(sc::page_size::A3, sc::orientation::landscape);
-        CHECK_NEAR(pdf.width(), 1190.5512, 1e-4);          // the current page's size
-        CHECK_NEAR(pdf.height(), 841.8898, 1e-4);
-        pdf.page_content().rectangle(0, 0, pdf.width(), 100); // from its own top-left corner
+        CHECK_NEAR(pdf.size().width(), 1190.5512, 1e-4);          // the current page's size
+        CHECK_NEAR(pdf.size().height(), 841.8898, 1e-4);
+        pdf.page_content().rectangle(0, 0, pdf.size().width(), 100); // from its own top-left corner
         pdf.page_content().fill();
         pdf.bookmark("A3, 100 points down", 2, 100);
-        pdf.add_page(200, 300);                             // any size
+        pdf.add_page({200, 300});                             // any size
         pdf.add_page();                                     // the document's: A4 again
-        CHECK_NEAR(pdf.height(), 841.8898, 1e-4);
+        CHECK_NEAR(pdf.size().height(), 841.8898, 1e-4);
         pdf.set_page(1);
-        CHECK_NEAR(pdf.width(), 595.2756, 1e-4);
-        CHECK_THROWS_AS(pdf.add_page(2, 300), std::invalid_argument);
+        CHECK_NEAR(pdf.size().width(), 595.2756, 1e-4);
+        CHECK_THROWS_AS(pdf.add_page({2, 300}), std::invalid_argument);
         pdf.close();
     }
     {
@@ -383,7 +383,7 @@ int main() {
         // Written with its colour space, and CMYK from Adobe with the Decode array undoing its inversion.
         const auto cmyk_file = fs::temp_directory_path() / "sc-pdflite-cmyk.pdf"; // the image data isn't real: not for the checkers
         {
-            document pdf{cmyk_file, 200, 200};
+            document pdf{cmyk_file, {200, 200}};
             pdf.page_content().draw(pdf.image(jpeg(header(0xC0, 8, 10, 20, 4, true))), sc::rect{0, 0, 20, 10});
             pdf.close();
         }
@@ -564,7 +564,7 @@ int main() {
     SECTION("Links and bookmarks");
     const auto links_file = output() / "links.pdf";
     {
-        document pdf{links_file, 595.2756, 841.8898};
+        document pdf{links_file, {595.2756, 841.8898}};
         const auto font = pdf.standard_font(sc::standard_font::face::helvetica);
         auto &first = pdf.page_content();
         first.begin_text();
@@ -572,7 +572,7 @@ int main() {
         first.text_position(72, 82);
         first.show("A link to example.com, and one to page 2");
         first.end_text();
-        const double h = pdf.height();
+        const double h = pdf.size().height();
         pdf.link(sc::rect{72, h - 775, 228, 20}, "https://example.com/a b/caf\xC3\xA9?x=(1)"); // a space, UTF-8 and brackets
         pdf.link(sc::rect{72, h - 750, 228, 20}, 2, h - 800); // a page that isn't there yet
         CHECK_THROWS_AS(pdf.link(sc::rect{std::numeric_limits<double>::quiet_NaN(), 0, 10, 10}, "https://example.com"), std::invalid_argument);
@@ -606,7 +606,7 @@ int main() {
     {
         // A link or bookmark to a page that never comes: close() refuses before writing anything.
         const auto missing = fs::temp_directory_path() / "sc-pdflite-missing-page.pdf"; // not for the checkers
-        document pdf{missing, 200, 200};
+        document pdf{missing, {200, 200}};
         pdf.link(sc::rect{0, 0, 10, 10}, 3);
         CHECK_THROWS_AS(pdf.close(), std::out_of_range);
         CHECK(!pdf.closed());
@@ -621,16 +621,16 @@ int main() {
     {
         {
             document landscape{fs::temp_directory_path() / "sc-pdflite-landscape.pdf", sc::page_size::A5, sc::orientation::landscape};
-            CHECK_NEAR(landscape.width(), 595.2756, 1e-4); // A5 turned: 210 x 148 mm
-            CHECK_NEAR(landscape.height(), 419.5276, 1e-4);
-            CHECK_EQ(sc::console::format(static_cast<sc::dist::mm>(landscape.height())), std::string{"148mm"});
+            CHECK_NEAR(landscape.size().width(), 595.2756, 1e-4); // A5 turned: 210 x 148 mm
+            CHECK_NEAR(landscape.size().height(), 419.5276, 1e-4);
+            CHECK_EQ(sc::console::format(static_cast<sc::dist::mm>(landscape.size().height())), std::string{"148mm"});
             landscape.close();
             fs::remove(fs::temp_directory_path() / "sc-pdflite-landscape.pdf");
         }
-        CHECK_THROWS_AS(document(output() / "too-small.pdf", 2, 100), std::invalid_argument);
+        CHECK_THROWS_AS(document(output() / "too-small.pdf", {2, 100}), std::invalid_argument);
         CHECK(!fs::exists(output() / "too-small.pdf")); // checked before the file is made
         const auto unfinished = fs::temp_directory_path() / "sc-pdflite-unfinished.pdf"; // not for the checkers
-        document pdf{unfinished, 200, 200};
+        document pdf{unfinished, {200, 200}};
         pdf.page_content().save();
         CHECK_THROWS_AS(pdf.close(), std::logic_error); // an open q
         pdf.page_content().restore();

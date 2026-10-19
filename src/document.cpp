@@ -26,8 +26,8 @@ namespace sc::pdflite {
         }
     }
 
-    document::document(const std::filesystem::path &path, const sc::distance width, const sc::distance height)
-        : file_(checked(path, width, height)), width_(width), height_(height) {
+    document::document(const std::filesystem::path &path, const sc::size_<sc::distance> &size)
+        : file_(checked(path, size.width(), size.height())), width_(size.width()), height_(size.height()) {
         pages_id_ = file_.allocate();
         add_page();
     }
@@ -51,7 +51,7 @@ namespace sc::pdflite {
     }
 
     document::document(const std::filesystem::path &path, const sc::page_size paper, const sc::orientation turned)
-        : document(path, sc::page_dimensions(paper, turned).width(), sc::page_dimensions(paper, turned).height()) {}
+        : document(path, sc::page_dimensions(paper, turned)) {}
 
     array document::rect_of(const sc::rect &where) const {
         if (where.width() < 0 || where.height() < 0) throw std::invalid_argument("sc::pdflite: an area with a negative size");
@@ -72,18 +72,17 @@ namespace sc::pdflite {
         if (file_.finished()) throw std::logic_error("sc::pdflite: the document is closed");
     }
 
-    void document::add_page() { add_page(width_, height_); }
+    void document::add_page() { add_page({width_, height_}); }
 
-    void document::add_page(const sc::distance width, const sc::distance height) {
+    void document::add_page(const sc::size_<sc::distance> &size) {
         check_open();
-        check_size(width, height);
-        pages_.push_back({file_.allocate(), width.points(), height.points(), pdflite::content{height}, {}, {}});
+        check_size(size.width(), size.height());
+        pages_.push_back({file_.allocate(), size.width().points(), size.height().points(), pdflite::content{size.height()}, {}, {}});
         current_ = pages_.size() - 1;
     }
 
     void document::add_page(const sc::page_size paper, const sc::orientation turned) {
-        const auto size = sc::page_dimensions(paper, turned);
-        add_page(size.width(), size.height());
+        add_page(sc::page_dimensions(paper, turned));
     }
 
     void document::set_page(const std::size_t page) {

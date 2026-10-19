@@ -31,9 +31,8 @@ int main(int argc, char **argv) {
         sc::console::heading("A document of A4 pages: sc-graphics' paper sizes, or any size in points");
         sc::pdflite::document pdf{output, sc::page_size::A4};
         sc::console::step("sc::pdflite::document pdf{output, sc::page_size::A4};   // " + output.string());
-        SC_SHOW(pdf.width());  // a distance, in points (1/72 inch)
-        SC_SHOW(pdf.height());
-        SC_SHOW(static_cast<sc::dist::mm>(pdf.width())); // the same, in millimetres
+        SC_SHOW(pdf.size());                                       // distances, in points (1/72 inch)
+        SC_SHOW(static_cast<sc::size_<sc::dist::mm>>(pdf.size())); // the same, in millimetres
 
         sc::console::heading("Text: a built-in font, then BT ... ET");
         auto &page = pdf.page_content();
@@ -45,7 +44,7 @@ int main(int argc, char **argv) {
         SC_SHOW(width); // Adobe's widths: lines are measured as readers draw them
         page.begin_text();
         page.font(bold, 28);
-        page.text_position((pdf.width() - width) / 2, 82); // centred, the baseline 82 points from the top
+        page.text_position((pdf.size().width() - width) / 2, 82); // centred, the baseline 82 points from the top
         page.show(*sc::pdflite::document::win_ansi(heading));
         page.end_text();
 
