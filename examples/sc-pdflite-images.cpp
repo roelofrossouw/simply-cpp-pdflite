@@ -18,6 +18,9 @@
 #include <pdflite.h>
 #include <standard_font.h>
 
+// The units by their plain names: mm(10), inch(1), pdf.size().in<mm>().
+using namespace sc::dist;
+
 namespace {
     // A caption in Helvetica, centred under box.
     void caption(sc::pdflite::document &pdf, const sc::rect &box, const std::string &text) {
@@ -61,24 +64,24 @@ int main(int argc, char **argv) {
         SC_SHOW(cat); // its name in the page's resources
 
         sc::console::heading("Drawn into a box, keeping its proportions: draw(name, rect)");
-        const sc::distance width = sc::dist::mm(80);
+        const sc::distance width = mm(80);
         const sc::distance height = width * photo.size().height() / photo.size().width();
-        const sc::rect original{sc::dist::mm(20), sc::dist::mm(25), width, height};
+        const sc::rect original{mm(20), mm(25), width, height};
         auto &page = pdf.page_content();
         SC_STEP(page.draw(cat, original));
         caption(pdf, original, "As it is");
 
         sc::console::heading("Through an sc::transform of its unit square: mirrored, turned, scaled");
-        const sc::rect mirrored_box{sc::dist::mm(110), sc::dist::mm(25), width, height};
+        const sc::rect mirrored_box{mm(110), mm(25), width, height};
         SC_STEP(page.draw(cat, filling(mirrored_box).then(sc::transform::flip_horizontal(mirrored_box.center().x()))));
         caption(pdf, mirrored_box, "Mirrored: flip_horizontal");
 
-        const sc::rect turned_box{sc::dist::mm(20), sc::dist::mm(105), width, height};
+        const sc::rect turned_box{mm(20), mm(105), width, height};
         const auto turn = sc::transform::rotate(30, turned_box.center());
         SC_STEP(page.draw(cat, filling(turned_box).then(turn)));
         caption(pdf, sc::to_path(turn.apply(turned_box)).bounds(), "Turned 30 degrees about its centre: rotate"); // under where it went
 
-        const sc::rect scaled_box{sc::dist::mm(110), sc::dist::mm(105), width, height};
+        const sc::rect scaled_box{mm(110), mm(105), width, height};
         SC_STEP(page.draw(cat, filling(scaled_box).then(sc::transform::scale(0.5, scaled_box.center()))));
         caption(pdf, scaled_box, "Half the size, about its centre: scale");
 
@@ -89,7 +92,7 @@ int main(int argc, char **argv) {
         drawn.draw(sc::text{"sc-image", {40, 300}, sc::font::bold("sans-serif", 28)}, sc::color{0.1, 0.1, 0.1});
         const auto picture = sc::pdflite::jpeg(drawn.encoded("jpg", 90));
         SC_SHOW(picture.size());
-        const sc::rect picture_box{sc::dist::mm(55), sc::dist::mm(190), sc::dist::mm(100), sc::dist::mm(100) * 320 / 480};
+        const sc::rect picture_box{mm(55), mm(190), mm(100), mm(100) * 320 / 480};
         SC_STEP(page.draw(pdf.image(picture), picture_box));
         caption(pdf, picture_box, "Drawn with sc-image, encoded as a JPEG");
 

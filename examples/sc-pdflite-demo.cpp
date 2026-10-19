@@ -13,6 +13,9 @@
 #include <pdflite.h>
 #include <standard_font.h>
 
+// The units by their plain names: mm(10), inch(1), pdf.size().in<mm>().
+using namespace sc::dist;
+
 int main(int argc, char **argv) {
     const sc::params args{argc, argv, {
         {"name", "sc-pdflite-demo"},
@@ -31,8 +34,8 @@ int main(int argc, char **argv) {
         sc::console::heading("A document of A4 pages: sc-graphics' paper sizes, or any size in points");
         sc::pdflite::document pdf{output, sc::page_size::A4};
         sc::console::step("sc::pdflite::document pdf{output, sc::page_size::A4};   // " + output.string());
-        SC_SHOW(pdf.size());                                       // distances, in points (1/72 inch)
-        SC_SHOW(static_cast<sc::size_<sc::dist::mm>>(pdf.size())); // the same, in millimetres
+        SC_SHOW(pdf.size());          // distances, in points (1/72 inch)
+        SC_SHOW(pdf.size().in<mm>()); // the same, in millimetres
 
         sc::console::heading("Text: a built-in font, then BT ... ET");
         auto &page = pdf.page_content();
@@ -51,7 +54,7 @@ int main(int argc, char **argv) {
         const auto serif = pdf.standard_font(sc::standard_font::face::times_roman);
         page.begin_text();
         page.font(serif, 13);
-        page.text_position(sc::dist::inch(1), 122); // a unit from sc::dist, or a plain number of points
+        page.text_position(inch(1), 122); // a unit from sc::dist, or a plain number of points
         SC_STEP(page.show(*sc::pdflite::document::win_ansi("Strict PDF 1.7, no library but zlib: caf\xC3\xA9, \xE2\x82\xAC 12, (brackets) and \\.")));
         page.end_text();
 
@@ -60,7 +63,7 @@ int main(int argc, char **argv) {
         page.fill_colour(0.85, 0.93, 0.98);
         page.stroke_colour(0.16, 0.44, 0.59);
         page.line_width(2);
-        SC_STEP(page.rectangle(sc::dist::mm(25.4), 162, sc::dist::mm(77.6), 120)); // left, top, width, height
+        SC_STEP(page.rectangle(mm(25.4), 162, mm(77.6), 120)); // left, top, width, height
         SC_STEP(page.fill_and_stroke());
         page.fill_colour(0.93, 0.42, 0.3);
         page.move(320, 282);

@@ -69,8 +69,8 @@ drawing. It's installed with the runtime package (`simply-cpp-pdflite`). Its cod
 sc::console::heading("A document of A4 pages: sc-graphics' paper sizes, or any size in points");
 sc::pdflite::document pdf{output, sc::page_size::A4};
 sc::console::step("sc::pdflite::document pdf{output, sc::page_size::A4};   // " + output.string());
-SC_SHOW(pdf.size());                                       // distances, in points (1/72 inch)
-SC_SHOW(static_cast<sc::size_<sc::dist::mm>>(pdf.size())); // the same, in millimetres
+SC_SHOW(pdf.size());          // distances, in points (1/72 inch)
+SC_SHOW(pdf.size().in<mm>()); // the same, in millimetres
 
 sc::console::heading("Text: a built-in font, then BT ... ET");
 auto &page = pdf.page_content();
@@ -89,7 +89,7 @@ page.end_text();
 const auto serif = pdf.standard_font(sc::standard_font::face::times_roman);
 page.begin_text();
 page.font(serif, 13);
-page.text_position(sc::dist::inch(1), 122); // a unit from sc::dist, or a plain number of points
+page.text_position(inch(1), 122); // a unit from sc::dist, or a plain number of points
 SC_STEP(page.show(*sc::pdflite::document::win_ansi("Strict PDF 1.7, no library but zlib: caf\xC3\xA9, \xE2\x82\xAC 12, (brackets) and \\.")));
 page.end_text();
 
@@ -98,7 +98,7 @@ page.save();
 page.fill_colour(0.85, 0.93, 0.98);
 page.stroke_colour(0.16, 0.44, 0.59);
 page.line_width(2);
-SC_STEP(page.rectangle(sc::dist::mm(25.4), 162, sc::dist::mm(77.6), 120)); // left, top, width, height
+SC_STEP(page.rectangle(mm(25.4), 162, mm(77.6), 120)); // left, top, width, height
 SC_STEP(page.fill_and_stroke());
 page.fill_colour(0.93, 0.42, 0.3);
 page.move(320, 282);
@@ -207,12 +207,12 @@ the middle, and a link from the first to the second. Its code, copied from
 ```cpp
 sc::console::heading("Page 1: the document's size, A4 portrait");
 sc::pdflite::document pdf{output, sc::page_size::A4};
-SC_SHOW(static_cast<sc::size_<sc::dist::mm>>(pdf.size())); // the current page's size, in mm
+SC_SHOW(pdf.size().in<mm>()); // the current page's size, in mm
 frame_and_size(pdf, "A4 portrait");
 
 sc::console::heading("Page 2: a size of its own, A3 landscape (add_page(paper, orientation))");
 SC_STEP(pdf.add_page(sc::page_size::A3, sc::orientation::landscape));
-SC_SHOW(static_cast<sc::size_<sc::dist::mm>>(pdf.size())); // now page 2's
+SC_SHOW(pdf.size().in<mm>()); // now page 2's
 frame_and_size(pdf, "A3 landscape");
 
 sc::console::heading("Links and bookmarks find each page's own size");
@@ -221,10 +221,10 @@ const auto font = pdf.standard_font(sc::standard_font::face::helvetica);
 auto &first = pdf.page_content();
 first.begin_text();
 first.font(font, 12);
-first.text_position(sc::dist::mm(25), sc::dist::mm(30));
+first.text_position(mm(25), mm(30));
 first.show("To the A3 page");
 first.end_text();
-SC_STEP(pdf.link(sc::rect{sc::dist::mm(25), sc::dist::mm(25), sc::dist::mm(32), sc::dist::mm(7)}, 2));
+SC_STEP(pdf.link(sc::rect{mm(25), mm(25), mm(32), mm(7)}, 2));
 SC_STEP(pdf.bookmark("A4 portrait", 1));
 SC_STEP(pdf.bookmark("A3 landscape", 2));
 pdf.info("Title", "sc-pdflite: pages of different sizes");
@@ -255,24 +255,24 @@ const auto cat = pdf.image(photo);
 SC_SHOW(cat); // its name in the page's resources
 
 sc::console::heading("Drawn into a box, keeping its proportions: draw(name, rect)");
-const sc::distance width = sc::dist::mm(80);
+const sc::distance width = mm(80);
 const sc::distance height = width * photo.size().height() / photo.size().width();
-const sc::rect original{sc::dist::mm(20), sc::dist::mm(25), width, height};
+const sc::rect original{mm(20), mm(25), width, height};
 auto &page = pdf.page_content();
 SC_STEP(page.draw(cat, original));
 caption(pdf, original, "As it is");
 
 sc::console::heading("Through an sc::transform of its unit square: mirrored, turned, scaled");
-const sc::rect mirrored_box{sc::dist::mm(110), sc::dist::mm(25), width, height};
+const sc::rect mirrored_box{mm(110), mm(25), width, height};
 SC_STEP(page.draw(cat, filling(mirrored_box).then(sc::transform::flip_horizontal(mirrored_box.center().x()))));
 caption(pdf, mirrored_box, "Mirrored: flip_horizontal");
 
-const sc::rect turned_box{sc::dist::mm(20), sc::dist::mm(105), width, height};
+const sc::rect turned_box{mm(20), mm(105), width, height};
 const auto turn = sc::transform::rotate(30, turned_box.center());
 SC_STEP(page.draw(cat, filling(turned_box).then(turn)));
 caption(pdf, sc::to_path(turn.apply(turned_box)).bounds(), "Turned 30 degrees about its centre: rotate"); // under where it went
 
-const sc::rect scaled_box{sc::dist::mm(110), sc::dist::mm(105), width, height};
+const sc::rect scaled_box{mm(110), mm(105), width, height};
 SC_STEP(page.draw(cat, filling(scaled_box).then(sc::transform::scale(0.5, scaled_box.center()))));
 caption(pdf, scaled_box, "Half the size, about its centre: scale");
 
@@ -283,7 +283,7 @@ drawn.draw(sc::rect{250, 70, 180, 180}, sc::appearance::filled(sc::color{0.93, 0
 drawn.draw(sc::text{"sc-image", {40, 300}, sc::font::bold("sans-serif", 28)}, sc::color{0.1, 0.1, 0.1});
 const auto picture = sc::pdflite::jpeg(drawn.encoded("jpg", 90));
 SC_SHOW(picture.size());
-const sc::rect picture_box{sc::dist::mm(55), sc::dist::mm(190), sc::dist::mm(100), sc::dist::mm(100) * 320 / 480};
+const sc::rect picture_box{mm(55), mm(190), mm(100), mm(100) * 320 / 480};
 SC_STEP(page.draw(pdf.image(picture), picture_box));
 caption(pdf, picture_box, "Drawn with sc-image, encoded as a JPEG");
 
@@ -312,21 +312,21 @@ copied from `examples/sc-pdflite-png.cpp` at configure time:
 ```cpp
 sc::pdflite::document pdf{output, sc::page_size::A4};
 auto &page = pdf.page_content();
-stripes(page, sc::rect{sc::dist::mm(15), sc::dist::mm(15), sc::dist::mm(180), sc::dist::mm(200)});
+stripes(page, sc::rect{mm(15), mm(15), mm(180), mm(200)});
 
 sc::console::heading("An alpha channel: decoded, its alpha written as a soft mask");
 const auto badge = sc::pdflite::png::load(folder / "badge.png");
 SC_SHOW(badge.size());
 SC_SHOW(badge.colour_type()); // 6: RGB and alpha
 SC_SHOW(badge.copied());      // false: an alpha channel has to be split off
-const sc::rect left{sc::dist::mm(25), sc::dist::mm(25), sc::dist::mm(70), sc::dist::mm(70)};
+const sc::rect left{mm(25), mm(25), mm(70), mm(70)};
 SC_STEP(page.draw(pdf.image(badge), left));
 caption(pdf, left, "RGBA: the edge fades out");
 
 sc::console::heading("Interlaced (Adam7): the passes put back together");
 const auto interlaced = sc::pdflite::png::load(folder / "badge-interlaced.png");
 SC_SHOW(interlaced.interlaced());
-const sc::rect right{sc::dist::mm(115), sc::dist::mm(25), sc::dist::mm(70), sc::dist::mm(70)};
+const sc::rect right{mm(115), mm(25), mm(70), mm(70)};
 SC_STEP(page.draw(pdf.image(interlaced), right));
 caption(pdf, right, "The same, interlaced");
 
@@ -334,14 +334,14 @@ sc::console::heading("A palette with a see-through colour (tRNS)");
 const auto stamp = sc::pdflite::png::load(folder / "stamp.png");
 SC_SHOW(stamp.colour_type()); // 3: a palette
 SC_SHOW(stamp.transparent()); // its colour 0 is see-through
-const sc::rect middle{sc::dist::mm(70), sc::dist::mm(115), sc::dist::mm(70), sc::dist::mm(70)};
+const sc::rect middle{mm(70), mm(115), mm(70), mm(70)};
 SC_STEP(page.draw(pdf.image(stamp), middle));
 caption(pdf, middle, "A palette, its first colour see-through");
 
 sc::console::heading("Without transparency, a PNG is copied as it is: nothing decoded");
 const auto gradient = sc::pdflite::png::load(folder / "gradient.png");
 SC_SHOW(gradient.copied()); // true: its compressed data goes in with PNG's own predictors
-const sc::rect below{sc::dist::mm(45), sc::dist::mm(230), sc::dist::mm(120), sc::dist::mm(40)};
+const sc::rect below{mm(45), mm(230), mm(120), mm(40)};
 SC_STEP(page.draw(pdf.image(gradient), below));
 caption(pdf, below, "RGB without transparency: copied as it is");
 
@@ -373,19 +373,19 @@ SC_SHOW(scene.drawing().items().size());
 const auto name = pdf.image(scene);
 SC_SHOW(name);
 
-const sc::distance width = sc::dist::mm(170);
-const sc::rect large{sc::dist::mm(20), sc::dist::mm(20), width, width * scene.size().height() / scene.size().width()};
+const sc::distance width = mm(170);
+const sc::rect large{mm(20), mm(20), width, width * scene.size().height() / scene.size().width()};
 SC_STEP(page.draw(name, large));
 caption(pdf, large, "Large: vectors stay sharp");
 
 sc::console::heading("The same form, small, mirrored and turned: written once");
-const sc::rect small{sc::dist::mm(20), sc::dist::mm(170), sc::dist::mm(40), sc::dist::mm(30)};
+const sc::rect small{mm(20), mm(170), mm(40), mm(30)};
 SC_STEP(page.draw(name, small));
 caption(pdf, small, "Small");
-const sc::rect mirrored{sc::dist::mm(80), sc::dist::mm(170), sc::dist::mm(40), sc::dist::mm(30)};
+const sc::rect mirrored{mm(80), mm(170), mm(40), mm(30)};
 SC_STEP(page.draw(name, filling(mirrored).then(sc::transform::flip_horizontal(mirrored.center().x()))));
 caption(pdf, mirrored, "Mirrored");
-const sc::rect turned{sc::dist::mm(140), sc::dist::mm(170), sc::dist::mm(40), sc::dist::mm(30)};
+const sc::rect turned{mm(140), mm(170), mm(40), mm(30)};
 SC_STEP(page.draw(name, filling(turned).then(sc::transform::rotate(-15, turned.center()))));
 caption(pdf, turned, "Turned");
 
@@ -395,7 +395,7 @@ const auto badge = sc::pdflite::svg::parse(R"svg(<svg xmlns="http://www.w3.org/2
     <circle cx="44" cy="40" r="26" fill="#e9c46a" fill-opacity="0.85"/>
     <text x="84" y="50" font-family="Helvetica" font-weight="bold" font-size="24" fill="#ffffff">sc-pdflite</text>
 </svg>)svg");
-const sc::rect badge_box{sc::dist::mm(65), sc::dist::mm(225), sc::dist::mm(80), sc::dist::mm(80) * 80 / 240};
+const sc::rect badge_box{mm(65), mm(225), mm(80), mm(80) * 80 / 240};
 SC_STEP(page.draw(pdf.image(badge), badge_box));
 caption(pdf, badge_box, "From SVG text");
 
