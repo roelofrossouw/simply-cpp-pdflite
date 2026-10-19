@@ -150,7 +150,7 @@ namespace sc::pdflite {
         op("1 0 0 1 " + number(x) + " " + number(this->y(y)) + " Tm");
     }
 
-    void content::image(const std::string_view resource, const sc::transform &placement) {
+    void content::draw(const std::string_view resource, const sc::transform &placement) {
         outside_text("Do");
         // The unit square is y up in PDF; the flip on both sides of the placement, and the square's
         // own (v = 1 - t), give [a -b -c d (c + e) (h - d - f)].
@@ -162,8 +162,8 @@ namespace sc::pdflite {
         op("Q");
     }
 
-    void content::image(const std::string_view resource, const sc::rect &where) {
-        image(resource, sc::transform{where.width(), 0, 0, where.height(), where.left(), where.top()});
+    void content::draw(const std::string_view resource, const sc::rect &where) {
+        draw(resource, sc::transform{where.width(), 0, 0, where.height(), where.left(), where.top()});
     }
 
     void content::show(const std::string_view bytes) {

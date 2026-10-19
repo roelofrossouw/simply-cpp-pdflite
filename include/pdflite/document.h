@@ -4,6 +4,8 @@
 #include "content.h"
 #include "file.h"
 #include "image.h"
+
+#include <memory>
 #include "object.h"
 
 #include <distance.h>
@@ -78,9 +80,10 @@ namespace sc::pdflite {
         // metrics are sc::standard_font's: sc::standard_font{face}.width(text, size).
         std::string standard_font(sc::standard_font::face which);
 
-        // The resource name ("Im1") of picture in the current page's resources, adding it there
-        // (and to the file, once) the first time; draw it with content::image(). The same picture
-        // (or a copy of it) used again, on any page, is written once.
+        // The resource name ("Im1") of picture (a jpeg, png or svg) in the current page's
+        // resources, adding it there (and to the file, once) the first time; draw it with
+        // content::draw(). The same picture (or a copy of it) used again, on any page, is written
+        // once.
         std::string image(const pdflite::image &picture);
 
         // UTF-8 text in WinAnsiEncoding, the built-in fonts' bytes; nullopt when a character isn't
@@ -123,7 +126,7 @@ namespace sc::pdflite {
             double width, height;
             pdflite::content content;
             std::map<sc::standard_font::face, std::string> fonts; // each font: its resource name here
-            std::map<const std::string *, std::string> images;    // each image (by its bytes): its name here
+            std::map<const void *, std::string> images;           // each picture (by its identity): its name here
             struct link {
                 array rect;                         // [left bottom right top], in PDF's coordinates
                 std::optional<pdflite::string> uri; // a URI action's, or else a page and a top
@@ -158,10 +161,10 @@ namespace sc::pdflite {
         std::size_t current_ = 0;
         std::map<sc::standard_font::face, std::uint32_t> fonts_; // each font: its object
         struct written_image {
-            pdflite::image picture; // held, so its bytes stay where they are
+            std::shared_ptr<const pdflite::image> picture; // held, so its identity stays unique
             std::uint32_t id;
         };
-        std::map<const std::string *, written_image> images_; // by the image's bytes, which copies share
+        std::map<const void *, written_image> images_; // by the picture's identity, which copies share
         std::map<std::string, pdflite::string> info_;
         std::vector<outline_item> outline_;
     };
