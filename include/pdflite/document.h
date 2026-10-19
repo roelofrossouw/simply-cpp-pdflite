@@ -5,6 +5,7 @@
 #include "file.h"
 #include "object.h"
 
+#include <distance.h>
 #include <page.h>
 #include <rect.h>
 
@@ -26,9 +27,10 @@ namespace sc::pdflite {
     // information dictionary. It starts with one page, the current one.
     class document {
     public:
-        // In points. Throws std::invalid_argument for a size readers can't show (ISO 32000-1 annex
-        // C: 3 to 14,400 points), std::runtime_error when the file can't be created.
-        document(const std::filesystem::path &path, double width, double height);
+        // Any sc::distance (sc::mm, sc::inch, or points). Throws std::invalid_argument for a size
+        // readers can't show (ISO 32000-1 annex C: 3 to 14,400 points), std::runtime_error when the
+        // file can't be created.
+        document(const std::filesystem::path &path, sc::distance width, sc::distance height);
 
         // A standard paper size (sc-graphics' page.h, shared with sc-pdf and sc-mupdf), portrait
         // or turned to landscape.
@@ -86,13 +88,13 @@ namespace sc::pdflite {
         // Makes where a link to page (counting from 1), shown from top (points from the page's top)
         // down (an /XYZ destination, 12.3.2.2). The page needn't exist yet; close() throws
         // std::out_of_range when it doesn't by then.
-        void link(const sc::rect &where, std::size_t page, double top = 0);
+        void link(const sc::rect &where, std::size_t page, sc::distance top = 0);
 
         // A bookmark in the reader's outline (12.3.3), to page from top down: level 0 is the
         // outermost, and each deeper level goes under the bookmark before it (a level more than
         // one deeper than that one's counts as one deeper). Bookmarks keep the order they're added
         // in and start closed. The page is checked by close(), like a link's.
-        void bookmark(std::string_view title, std::size_t page, double top = 0, int level = 0);
+        void bookmark(std::string_view title, std::size_t page, sc::distance top = 0, int level = 0);
 
         // Finishes the file. Throws std::logic_error when a page's content isn't complete (an open
         // q, text object or path), std::runtime_error when writing failed; nothing can be added

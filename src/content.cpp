@@ -14,7 +14,7 @@ namespace sc::pdflite {
         }
     }
 
-    content::content(const double page_height) : height_(page_height) {
+    content::content(const sc::distance page_height) : height_(page_height) {
         number(page_height); // throws when it isn't finite
     }
 
@@ -42,16 +42,16 @@ namespace sc::pdflite {
         saved_.pop_back();
     }
 
-    void content::transform(const double a, const double b, const double c, const double d, const double e, const double f) {
+    void content::transform(const double a, const double b, const double c, const double d, const sc::distance e, const sc::distance f) {
         outside_text("cm");
         // The flip y -> h - y on both sides of the mapping: [a -b -c d (c h + e) (h - d h - f)].
         op(number(a) + " " + number(-b) + " " + number(-c) + " " + number(d) + " " + number(c * height_ + e) + " " +
            number(height_ - d * height_ - f) + " cm");
     }
 
-    void content::line_width(const double width) {
+    void content::line_width(const sc::distance width) {
         if (in_path_) throw std::logic_error("sc::pdflite: w before the path is painted or ended");
-        if (!(width >= 0)) throw std::invalid_argument("sc::pdflite: a negative line width");
+        if (!(width.points() >= 0)) throw std::invalid_argument("sc::pdflite: a negative line width");
         op(number(width) + " w");
     }
 
@@ -75,19 +75,19 @@ namespace sc::pdflite {
         if (clipping_) throw std::logic_error("sc::pdflite: " + std::string{what} + " between W and the painting operator");
     }
 
-    void content::move(const double x, const double y) {
+    void content::move(const sc::distance x, const sc::distance y) {
         path_step("m");
         op(number(x) + " " + number(this->y(y)) + " m");
         in_path_ = true;
     }
 
-    void content::line(const double x, const double y) {
+    void content::line(const sc::distance x, const sc::distance y) {
         path_step("l");
         if (!in_path_) throw std::logic_error("sc::pdflite: l without a current point (m first)");
         op(number(x) + " " + number(this->y(y)) + " l");
     }
 
-    void content::curve(const double x1, const double y1, const double x2, const double y2, const double x3, const double y3) {
+    void content::curve(const sc::distance x1, const sc::distance y1, const sc::distance x2, const sc::distance y2, const sc::distance x3, const sc::distance y3) {
         path_step("c");
         if (!in_path_) throw std::logic_error("sc::pdflite: c without a current point (m first)");
         op(number(x1) + " " + number(y(y1)) + " " + number(x2) + " " + number(y(y2)) + " " + number(x3) + " " + number(y(y3)) + " c");
@@ -99,7 +99,7 @@ namespace sc::pdflite {
         op("h");
     }
 
-    void content::rectangle(const double left, const double top, const double width, const double height) {
+    void content::rectangle(const sc::distance left, const sc::distance top, const sc::distance width, const sc::distance height) {
         path_step("re");
         op(number(left) + " " + number(y(top + height)) + " " + number(width) + " " + number(height) + " re"); // from its bottom-left corner
         in_path_ = true;
@@ -139,13 +139,13 @@ namespace sc::pdflite {
         in_text_ = false;
     }
 
-    void content::font(const std::string_view resource, const double size) {
+    void content::font(const std::string_view resource, const sc::distance size) {
         if (in_path_) throw std::logic_error("sc::pdflite: Tf before the path is painted or ended");
         op(name{resource}.write() + " " + number(size) + " Tf");
         font_set_ = true;
     }
 
-    void content::text_position(const double x, const double y) {
+    void content::text_position(const sc::distance x, const sc::distance y) {
         if (!in_text_) throw std::logic_error("sc::pdflite: Tm outside a text object (BT first)");
         op("1 0 0 1 " + number(x) + " " + number(this->y(y)) + " Tm");
     }

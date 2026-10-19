@@ -9,6 +9,7 @@
 #include <params.h>
 #include <sc.h>
 
+#include <distance.h>
 #include <pdflite.h>
 #include <standard_font.h>
 
@@ -50,7 +51,7 @@ int main(int argc, char **argv) {
         const auto serif = pdf.standard_font("Times-Roman");
         page.begin_text();
         page.font(serif, 13);
-        page.text_position(72, 122);
+        page.text_position(sc::inch(1), 122); // sc::mm, sc::inch or a plain number of points
         SC_STEP(page.show(*sc::pdflite::document::win_ansi("Strict PDF 1.7, no library but zlib: caf\xC3\xA9, \xE2\x82\xAC 12, (brackets) and \\.")));
         page.end_text();
 
@@ -59,7 +60,7 @@ int main(int argc, char **argv) {
         page.fill_colour(0.85, 0.93, 0.98);
         page.stroke_colour(0.16, 0.44, 0.59);
         page.line_width(2);
-        SC_STEP(page.rectangle(72, 162, 220, 120)); // left, top, width, height
+        SC_STEP(page.rectangle(sc::mm(25.4), 162, sc::mm(77.6), 120)); // left, top, width, height
         SC_STEP(page.fill_and_stroke());
         page.fill_colour(0.93, 0.42, 0.3);
         page.move(320, 282);
