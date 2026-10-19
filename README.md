@@ -32,12 +32,15 @@ What it writes so far:
   palette, at any bit depth) is copied as it is, with PNG's own predictors; any other is decoded
   with zlib (interlacing undone) and its transparency (an alpha channel, a palette's alphas or a
   key colour) written as a soft mask. Each chunk's CRC and order are checked.
+- **SVG drawings** (`pdflite/svg.h`), read by sc-graphics (`sc::drawing`) and written as a form:
+  vectors, sharp at any size, placed like a picture. Strokes, fills (nonzero or even-odd), clips,
+  transparency, text in the built-in fonts and the PNGs or JPEGs in it.
 - **Links:** an area of a page that opens a URI (written in 7-bit ASCII, percent-encoded), or
   goes to a page and a height on it, which needn't exist yet.
 - **Bookmarks:** the reader's outline, nested by level, with Unicode titles; the file opens with
   it showing.
 
-Still to come: SVG drawings, then embedded fonts through FreeType.
+Still to come: embedded fonts through FreeType.
 Values are checked as they're written: a number that isn't finite, a page side readers can't show
 (outside 3 to 14,400 points) or malformed UTF-8 throws `std::invalid_argument`.
 

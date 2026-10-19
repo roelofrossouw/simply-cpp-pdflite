@@ -13,12 +13,17 @@ namespace sc::pdflite {
     std::string number(const double value) {
         if (!std::isfinite(value)) throw std::invalid_argument("sc::pdflite: a number that isn't finite");
         if (std::fabs(value) > 3.403e38) throw std::invalid_argument("sc::pdflite: a number too large for PDF readers");
-        const double rounded = std::round(value * 10000) / 10000;
+        // Four decimals, or for a number below 1 enough for six significant digits (a scale of
+        // 1/595 is 0.0016799, not 0.0017), at most ten.
+        const double size = std::fabs(value);
+        const int decimals = size >= 1 || size == 0 ? 4 : std::clamp(5 - static_cast<int>(std::floor(std::log10(size))), 4, 10);
+        const double scale = std::pow(10.0, decimals);
+        const double rounded = std::round(value * scale) / scale;
         if (rounded == 0) return "0"; // never "-0"
         if (std::trunc(rounded) == rounded && std::fabs(rounded) <= 2147483647.0)
             return std::to_string(static_cast<long long>(rounded));
         std::array<char, 64> buffer{};
-        const auto [end, error] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), rounded, std::chars_format::fixed, 4);
+        const auto [end, error] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), rounded, std::chars_format::fixed, decimals);
         if (error != std::errc{}) throw std::invalid_argument("sc::pdflite: a number that can't be written");
         std::string out{buffer.data(), end};
         while (out.back() == '0') out.pop_back();

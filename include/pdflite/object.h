@@ -17,8 +17,9 @@
 // valid: a number is finite and within what readers must handle, a name isn't empty, a dictionary
 // has each key once.
 namespace sc::pdflite {
-    // A number as PDF spells it (7.3.3): an integer when whole, else at most four decimals, never
-    // an exponent (PDF has none), "0" rather than "-0". Throws std::invalid_argument when it isn't
+    // A number as PDF spells it (7.3.3): an integer when whole, else four decimals (below 1, enough
+    // for six significant digits, at most ten), trailing zeros dropped, never an exponent (PDF has
+    // none), "0" rather than "-0". Throws std::invalid_argument when it isn't
     // finite or lies outside what readers must handle (annex C: about ±3.4e38).
     std::string number(double value);
 
