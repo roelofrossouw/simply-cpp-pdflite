@@ -35,12 +35,17 @@ What it writes so far:
 - **SVG drawings** (`pdflite/svg.h`), read by sc-graphics (`sc::drawing`) and written as a form:
   vectors, sharp at any size, placed like a picture. Strokes, fills (nonzero or even-odd), clips,
   transparency, text in the built-in fonts and the PNGs or JPEGs in it.
+- **Embedded fonts** (`pdflite/font.h`): any font FreeType reads, found as an `sc::font` asks
+  (fontconfig) or from a file, embedded as a subset of the glyphs used: a TrueType program made
+  from FreeType's outlines (a variable font's at the instance asked for, a CFF font's curves turned
+  quadratic), with a ToUnicode map so the text can be copied and searched, and the font's own
+  widths. Measured with `width()`, `ascender()`, `descender()`, `cap_height()`.
 - **Links:** an area of a page that opens a URI (written in 7-bit ASCII, percent-encoded), or
   goes to a page and a height on it, which needn't exist yet.
 - **Bookmarks:** the reader's outline, nested by level, with Unicode titles; the file opens with
   it showing.
 
-Still to come: embedded fonts through FreeType.
+Still to come: a font chosen per character when one font lacks it, and an `sc::canvas` on top.
 Values are checked as they're written: a number that isn't finite, a page side readers can't show
 (outside 3 to 14,400 points) or malformed UTF-8 throws `std::invalid_argument`.
 
@@ -408,6 +413,61 @@ SC_SHOW(std::filesystem::file_size(output)); // bytes: the scene is in it once
 ```
 <!-- /sc-example -->
 
+## Embedded fonts
+
+`sc-pdflite-fonts` writes text in the installed fonts fontconfig finds: a centred title,
+other alphabets, four weights of one family and a fixed-width face, each embedded as a subset.
+Its code, copied from `examples/sc-pdflite-fonts.cpp` at configure time:
+
+<!-- sc-example: examples/sc-pdflite-fonts.cpp -->
+```cpp
+sc::pdflite::document pdf{output, sc::page_size::A4};
+
+sc::console::heading("A font as an sc::font asks for it: fontconfig finds it, FreeType reads it");
+const sc::pdflite::font title{sc::font::bold("sans-serif", 26)};
+SC_SHOW(title.name()); // its PostScript name
+const std::string heading = "Embedded fonts, as subsets";
+const auto width = title.width(heading, 26);
+SC_SHOW(width);
+write(pdf, title, 26, (pdf.size().width() - width) / 2, mm(30), heading); // centred
+
+sc::console::heading("Text in it is glyphs: encode() picks them and records them for the subset");
+const sc::pdflite::font serif{sc::font{"serif", 13}};
+SC_SHOW(serif.name());
+write(pdf, serif, 13, mm(20), mm(45), "Only the glyphs this page uses go into the file, and a ToUnicode map lets");
+write(pdf, serif, 13, mm(20), mm(51), "readers copy and search the text: café, naïve, “quotes”, € 12,50.");
+
+sc::console::heading("Other alphabets, where the font has them (covers())");
+const sc::pdflite::font sans{sc::font{"sans-serif", 14}};
+const std::string greek = "Καλημέρα κόσμε", cyrillic = "Привет, мир";
+SC_SHOW(sans.covers(greek));
+SC_SHOW(sans.covers(cyrillic));
+write(pdf, sans, 14, mm(20), mm(66), "Greek: " + greek);
+write(pdf, sans, 14, mm(20), mm(74), "Cyrillic: " + cyrillic);
+
+sc::console::heading("Weights: each the face fontconfig finds for it");
+sc::distance y = mm(92);
+for (const int weight: {300, 400, 600, 800}) {
+    const sc::pdflite::font face{sc::font{"sans-serif", 16, weight}};
+    SC_SHOW(face.name());
+    write(pdf, face, 16, mm(20), y, "Weight " + std::to_string(weight) + ": " + face.name());
+    y = y + mm(9);
+}
+
+sc::console::heading("A fixed-width face, measured");
+const sc::pdflite::font mono{sc::font{"monospace", 11}};
+SC_SHOW(mono.width("iiii", 11) == mono.width("MMMM", 11)); // every glyph as wide
+write(pdf, mono, 11, mm(20), mm(135), "for (const auto &glyph: subset) write(glyph);");
+
+pdf.info("Title", "sc-pdflite: embedded fonts");
+pdf.info("Author", "Roelof Rossouw");
+pdf.info("Subject", "Installed fonts embedded as subsets: sans-serif, serif, monospace, weights and other alphabets");
+pdf.info("Creator", "sc-pdflite-fonts");
+SC_STEP(pdf.close());
+SC_SHOW(std::filesystem::file_size(output)); // bytes: subsets, not whole fonts
+```
+<!-- /sc-example -->
+
 ## Checking the files
 
 Its tests check the files they write byte by byte (every cross-reference entry points at its
@@ -419,7 +479,7 @@ installed is left out. On macOS: `brew install qpdf pdfcpu mupdf`.
 ## Building locally
 
 Run `bash scripts/install.sh` to configure, build, test, package and install.
-It needs sc-core, sc-graphics (installed if missing) and zlib.
+It needs sc-core, sc-graphics (installed if missing), zlib and FreeType.
 
 ## Usage
 

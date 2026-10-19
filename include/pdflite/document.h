@@ -3,6 +3,7 @@
 
 #include "content.h"
 #include "file.h"
+#include "font.h"
 #include "image.h"
 
 #include <memory>
@@ -79,6 +80,11 @@ namespace sc::pdflite {
         // metrics are sc::standard_font's: sc::standard_font{face}.width(text, size).
         std::string standard_font(sc::standard_font::face which);
 
+        // The resource name ("F2") of an embedded font in the current page's resources, adding it
+        // there (and to the file, once) the first time; put its text into glyphs with
+        // font.encode() for content::show(). Written by close(), as a subset of every glyph used.
+        std::string font(const pdflite::font &embedded);
+
         // The resource name ("Im1") of picture (a jpeg, png or svg) in the current page's
         // resources, adding it there (and to the file, once) the first time; draw it with
         // content::draw(). The same picture (or a copy of it) used again, on any page, is written
@@ -126,6 +132,7 @@ namespace sc::pdflite {
             pdflite::content content;
             std::map<sc::standard_font::face, std::string> fonts; // each font: its resource name here
             std::map<const void *, std::string> images;           // each picture (by its identity): its name here
+            std::map<const void *, std::string> embedded;         // each embedded font (by its identity): its name here
             struct link {
                 array rect;                         // [left bottom right top], in PDF's coordinates
                 std::optional<pdflite::string> uri; // a URI action's, or else a page and a top
@@ -164,6 +171,11 @@ namespace sc::pdflite {
             std::uint32_t id;
         };
         std::map<const void *, written_image> images_; // by the picture's identity, which copies share
+        struct written_font {
+            pdflite::font embedded; // held: copies share its glyphs
+            std::uint32_t id;
+        };
+        std::map<const void *, written_font> embedded_; // by the font's identity
         std::map<std::string, pdflite::string> info_;
         std::vector<outline_item> outline_;
     };

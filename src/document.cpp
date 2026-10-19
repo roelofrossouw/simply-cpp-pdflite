@@ -101,8 +101,20 @@ namespace sc::pdflite {
         auto &page = pages_[current_];
         if (const auto found = page.fonts.find(which); found != page.fonts.end()) return found->second;
         if (!fonts_.contains(which)) fonts_[which] = file_.allocate();
-        const std::string resource = "F" + std::to_string(page.fonts.size() + 1);
+        const std::string resource = "F" + std::to_string(page.fonts.size() + page.embedded.size() + 1);
         page.fonts[which] = resource;
+        return resource;
+    }
+
+    std::string document::font(const pdflite::font &embedded) {
+        check_open();
+        const void *key = embedded.identity();
+        auto &page = pages_[current_];
+        if (const auto found = page.embedded.find(key); found != page.embedded.end()) return found->second;
+        if (!embedded_.contains(key)) embedded_.emplace(key, written_font{embedded, file_.allocate()});
+        // Named after the page's built-in fonts, so the two never share a name.
+        const std::string resource = "F" + std::to_string(page.fonts.size() + page.embedded.size() + 1);
+        page.embedded[key] = resource;
         return resource;
     }
 
@@ -213,9 +225,10 @@ namespace sc::pdflite {
             const std::uint32_t contents = file_.allocate();
             file_.write_stream(contents, {}, page.content.text());
             dictionary resources;
-            if (!page.fonts.empty()) {
+            if (!page.fonts.empty() || !page.embedded.empty()) {
                 dictionary fonts;
                 for (const auto &[which, resource]: page.fonts) fonts.add(resource, reference{fonts_.at(which)});
+                for (const auto &[key, resource]: page.embedded) fonts.add(resource, reference{embedded_.at(key).id});
                 resources.add("Font", fonts);
             }
             if (!page.images.empty()) {
@@ -250,6 +263,8 @@ namespace sc::pdflite {
                                        {"Encoding", name{"WinAnsiEncoding"}}});
 
         for (const auto &[key, written]: images_) written.picture->write(file_, written.id);
+        // Last: the subsets hold every glyph the pages used.
+        for (const auto &[key, written]: embedded_) written.embedded.write(file_, written.id);
 
         const std::uint32_t outlines = write_outline();
         const std::uint32_t catalog = file_.allocate();

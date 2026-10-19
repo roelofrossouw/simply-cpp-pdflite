@@ -12,16 +12,17 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.17.0)
 # sc::standard_font (the built-in fonts by face since 6.2.0) and paper sizes in millimetres.
 find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 6.2.0)
-# Streams are compressed with zlib, the one library the writer uses.
+# Streams are compressed with zlib; embedded fonts are read by FreeType (as sc-graphics reads them).
 find_package(ZLIB REQUIRED)
+config_or_install_package(freetype2 libfreetype-dev freetype)
 
 set(SOURCE_OBJECTS)
 set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
 add_sc_object(pdflite
-        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/jpeg.cpp src/png.cpp src/svg.cpp
-        LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB
+        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/jpeg.cpp src/png.cpp src/svg.cpp src/font.cpp
+        LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB PkgConfig::freetype2
         PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB)
 
 add_sc_libraries(DESCRIPTION "simply-cpp-pdflite")
@@ -41,6 +42,7 @@ add_sc_example(sc-pdflite-links)
 add_sc_example(sc-pdflite-pages)
 add_sc_example(sc-pdflite-png)
 add_sc_example(sc-pdflite-svg)
+add_sc_example(sc-pdflite-fonts)
 # The PNG and SVG demos' pictures are installed with them, and found in the source when they run
 # from a build.
 install(FILES examples/resource/badge.png examples/resource/badge-interlaced.png examples/resource/stamp.png
@@ -65,4 +67,4 @@ if (sc-image_FOUND AND SC_BUILD_EXAMPLES)
 endif ()
 
 package_sc_module(
-        DEV_DEPENDS "simply-cpp-dev (>= 1.17.0~)" "simply-cpp-graphics-dev (>= 6.2.0~)" zlib1g-dev)
+        DEV_DEPENDS "simply-cpp-dev (>= 1.17.0~)" "simply-cpp-graphics-dev (>= 6.2.0~)" zlib1g-dev libfreetype-dev)
