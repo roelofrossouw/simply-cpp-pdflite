@@ -82,6 +82,9 @@ int main(int argc, char **argv) {
             pdf.bookmark("Section " + std::to_string(i + 1) + ".2", i + 2, top + 285, 1);
         }
         pdf.info("Title", "sc-pdflite: links and bookmarks");
+        pdf.info("Author", "Roelof Rossouw");
+        pdf.info("Subject", "A contents page linking to its chapters, links back, a web link and nested bookmarks");
+        pdf.info("Creator", "sc-pdflite-links");
         SC_STEP(pdf.close());
         SC_SHOW(std::filesystem::file_size(output)); // bytes
         // [/readme]

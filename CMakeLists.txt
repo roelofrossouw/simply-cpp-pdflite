@@ -39,6 +39,20 @@ endif ()
 add_sc_example(sc-pdflite-demo)
 add_sc_example(sc-pdflite-links)
 add_sc_example(sc-pdflite-pages)
+add_sc_example(sc-pdflite-png)
+add_sc_example(sc-pdflite-svg)
+# The PNG and SVG demos' pictures are installed with them, and found in the source when they run
+# from a build.
+install(FILES examples/resource/badge.png examples/resource/badge-interlaced.png examples/resource/stamp.png
+        examples/resource/gradient.png examples/resource/drawing.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/simply-cpp-pdflite COMPONENT runtime)
+foreach (demo IN ITEMS sc-pdflite-png sc-pdflite-svg)
+    if (TARGET ${demo})
+        target_compile_definitions(${demo} PRIVATE
+                SC_PDFLITE_EXAMPLE_INSTALLED="${CMAKE_INSTALL_FULL_DATADIR}/simply-cpp-pdflite"
+                SC_PDFLITE_EXAMPLE_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/examples/resource")
+    endif ()
+endforeach ()
 
 # The images demo also draws a picture with sc-image (OpenCV), so it's built when sc-image is
 # installed and isn't installed itself: the runtime package stays free of OpenCV.

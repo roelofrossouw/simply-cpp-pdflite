@@ -77,6 +77,9 @@ int main(int argc, char **argv) {
         SC_STEP(pdf.bookmark("A4 portrait", 1));
         SC_STEP(pdf.bookmark("A3 landscape", 2));
         pdf.info("Title", "sc-pdflite: pages of different sizes");
+        pdf.info("Author", "Roelof Rossouw");
+        pdf.info("Subject", "An A4 portrait page and an A3 landscape one in one file");
+        pdf.info("Creator", "sc-pdflite-pages");
         SC_STEP(pdf.close());
         SC_SHOW(std::filesystem::file_size(output)); // bytes
         // [/readme]
