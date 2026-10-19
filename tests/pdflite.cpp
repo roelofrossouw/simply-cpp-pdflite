@@ -313,6 +313,37 @@ int main() {
         CHECK(contains(streams, "1 0 0 1 72 769.8898 Tm"));
     }
 
+    SECTION("Pages of different sizes in one file");
+    const auto sizes_file = output() / "sizes.pdf";
+    {
+        document pdf{sizes_file, sc::page_size::A4};
+        CHECK_NEAR(pdf.width(), 595.2756, 1e-4);
+        pdf.link(sc::rect{72, 72, 200, 20}, 2);            // to the top of page 2
+        pdf.add_page(sc::page_size::A3, sc::orientation::landscape);
+        CHECK_NEAR(pdf.width(), 1190.5512, 1e-4);          // the current page's size
+        CHECK_NEAR(pdf.height(), 841.8898, 1e-4);
+        pdf.page_content().rectangle(0, 0, pdf.width(), 100); // from its own top-left corner
+        pdf.page_content().fill();
+        pdf.bookmark("A3, 100 points down", 2, 100);
+        pdf.add_page(200, 300);                             // any size
+        pdf.add_page();                                     // the document's: A4 again
+        CHECK_NEAR(pdf.height(), 841.8898, 1e-4);
+        pdf.set_page(1);
+        CHECK_NEAR(pdf.width(), 595.2756, 1e-4);
+        CHECK_THROWS_AS(pdf.add_page(2, 300), std::invalid_argument);
+        pdf.close();
+    }
+    {
+        const auto file = read(sizes_file);
+        CHECK(structure_problem(file).empty());
+        CHECK(contains(file, "/MediaBox [0 0 595.2756 841.8898]"));
+        CHECK(contains(file, "/MediaBox [0 0 1190.5512 841.8898]"));
+        CHECK(contains(file, "/MediaBox [0 0 200 300]"));
+        CHECK(contains(file, "/Rect [72 749.8898 272 769.8898]")); // page 1's own height
+        CHECK(contains(file, "/XYZ 0 741.8898 null]"));            // page 2's height, 100 down
+        CHECK(contains(inflated_streams(file), "0 741.8898 1190.5512 100 re"));
+    }
+
     SECTION("Links and bookmarks");
     const auto links_file = output() / "links.pdf";
     {

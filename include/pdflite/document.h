@@ -22,7 +22,8 @@
 // sc-pdflite's document: pages, the built-in fonts they use, and the document's information.
 namespace sc::pdflite {
 
-    // A PDF document: pages of one size, each with a content stream, the built-in fonts they use,
+    // A PDF document: pages, each of its own size (the document's unless add_page() gives one),
+    // each with a content stream, the built-in fonts they use,
     // and the document's information. The file is created at once and finished by close(): the
     // catalog, the page tree, each page with its resources and compressed content, and the
     // information dictionary. It starts with one page, the current one.
@@ -45,8 +46,14 @@ namespace sc::pdflite {
 
         document &operator=(const document &) = delete;
 
-        // Adds a page after the last and makes it current.
+        // Adds a page after the last and makes it current: of the document's size (the one it was
+        // made with), or of its own. Pages of different sizes can be mixed in one file. Throws
+        // std::invalid_argument for a size readers can't show, as the constructor does.
         void add_page();
+
+        void add_page(sc::distance width, sc::distance height);
+
+        void add_page(sc::page_size paper, sc::orientation turned = sc::orientation::portrait);
 
         // Makes page (counting from 1) current; throws std::out_of_range when there's no such page.
         void set_page(std::size_t page);
@@ -55,11 +62,11 @@ namespace sc::pdflite {
 
         [[nodiscard]] std::size_t page_count() const { return pages_.size(); }
 
-        // The page's size, in points: << writes "595pt"; static_cast<sc::dist::mm>(width()) is the
-        // same in millimetres.
-        [[nodiscard]] sc::distance width() const { return width_; }
+        // The current page's size, in points: << writes "595.276pt"; static_cast<sc::dist::mm>(width())
+        // is the same in millimetres.
+        [[nodiscard]] sc::distance width() const { return pages_[current_].width; }
 
-        [[nodiscard]] sc::distance height() const { return height_; }
+        [[nodiscard]] sc::distance height() const { return pages_[current_].height; }
 
         // The current page's content.
         content &page_content();
@@ -107,6 +114,7 @@ namespace sc::pdflite {
     private:
         struct page_state {
             std::uint32_t id;
+            double width, height;
             pdflite::content content;
             std::map<sc::standard_font::face, std::string> fonts; // each font: its resource name here
             struct link {
@@ -137,7 +145,7 @@ namespace sc::pdflite {
         void check_open() const;
 
         file file_;
-        double width_, height_;
+        double width_, height_; // the document's: for add_page() without a size
         std::uint32_t pages_id_;
         std::vector<page_state> pages_;
         std::size_t current_ = 0;

@@ -38,6 +38,7 @@ endif ()
 
 add_sc_example(sc-pdflite-demo)
 add_sc_example(sc-pdflite-links)
+add_sc_example(sc-pdflite-pages)
 
 package_sc_module(
         DEV_DEPENDS "simply-cpp-dev (>= 1.15.0~)" "simply-cpp-graphics-dev (>= 6.1.1~)" zlib1g-dev)
