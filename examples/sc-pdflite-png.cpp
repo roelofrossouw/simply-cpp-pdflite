@@ -16,6 +16,9 @@
 #include <pdflite.h>
 #include <standard_font.h>
 
+// The units by their plain names: mm(10), inch(1), pdf.size().in<mm>().
+using namespace sc::dist;
+
 namespace {
     // Diagonal stripes over area, so what's see-through in a picture shows.
     void stripes(sc::pdflite::content &page, const sc::rect &area) {
@@ -67,21 +70,21 @@ int main(int argc, char **argv) {
         // [readme]
         sc::pdflite::document pdf{output, sc::page_size::A4};
         auto &page = pdf.page_content();
-        stripes(page, sc::rect{sc::dist::mm(15), sc::dist::mm(15), sc::dist::mm(180), sc::dist::mm(200)});
+        stripes(page, sc::rect{mm(15), mm(15), mm(180), mm(200)});
 
         sc::console::heading("An alpha channel: decoded, its alpha written as a soft mask");
         const auto badge = sc::pdflite::png::load(folder / "badge.png");
         SC_SHOW(badge.size());
         SC_SHOW(badge.colour_type()); // 6: RGB and alpha
         SC_SHOW(badge.copied());      // false: an alpha channel has to be split off
-        const sc::rect left{sc::dist::mm(25), sc::dist::mm(25), sc::dist::mm(70), sc::dist::mm(70)};
+        const sc::rect left{mm(25), mm(25), mm(70), mm(70)};
         SC_STEP(page.draw(pdf.image(badge), left));
         caption(pdf, left, "RGBA: the edge fades out");
 
         sc::console::heading("Interlaced (Adam7): the passes put back together");
         const auto interlaced = sc::pdflite::png::load(folder / "badge-interlaced.png");
         SC_SHOW(interlaced.interlaced());
-        const sc::rect right{sc::dist::mm(115), sc::dist::mm(25), sc::dist::mm(70), sc::dist::mm(70)};
+        const sc::rect right{mm(115), mm(25), mm(70), mm(70)};
         SC_STEP(page.draw(pdf.image(interlaced), right));
         caption(pdf, right, "The same, interlaced");
 
@@ -89,14 +92,14 @@ int main(int argc, char **argv) {
         const auto stamp = sc::pdflite::png::load(folder / "stamp.png");
         SC_SHOW(stamp.colour_type()); // 3: a palette
         SC_SHOW(stamp.transparent()); // its colour 0 is see-through
-        const sc::rect middle{sc::dist::mm(70), sc::dist::mm(115), sc::dist::mm(70), sc::dist::mm(70)};
+        const sc::rect middle{mm(70), mm(115), mm(70), mm(70)};
         SC_STEP(page.draw(pdf.image(stamp), middle));
         caption(pdf, middle, "A palette, its first colour see-through");
 
         sc::console::heading("Without transparency, a PNG is copied as it is: nothing decoded");
         const auto gradient = sc::pdflite::png::load(folder / "gradient.png");
         SC_SHOW(gradient.copied()); // true: its compressed data goes in with PNG's own predictors
-        const sc::rect below{sc::dist::mm(45), sc::dist::mm(230), sc::dist::mm(120), sc::dist::mm(40)};
+        const sc::rect below{mm(45), mm(230), mm(120), mm(40)};
         SC_STEP(page.draw(pdf.image(gradient), below));
         caption(pdf, below, "RGB without transparency: copied as it is");
 

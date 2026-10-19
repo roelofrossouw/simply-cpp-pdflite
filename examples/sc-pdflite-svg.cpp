@@ -16,6 +16,9 @@
 #include <pdflite.h>
 #include <standard_font.h>
 
+// The units by their plain names: mm(10), inch(1), pdf.size().in<mm>().
+using namespace sc::dist;
+
 namespace {
     void caption(sc::pdflite::document &pdf, const sc::rect &box, const std::string &text) {
         const sc::standard_font font{sc::standard_font::face::helvetica};
@@ -59,19 +62,19 @@ int main(int argc, char **argv) {
         const auto name = pdf.image(scene);
         SC_SHOW(name);
 
-        const sc::distance width = sc::dist::mm(170);
-        const sc::rect large{sc::dist::mm(20), sc::dist::mm(20), width, width * scene.size().height() / scene.size().width()};
+        const sc::distance width = mm(170);
+        const sc::rect large{mm(20), mm(20), width, width * scene.size().height() / scene.size().width()};
         SC_STEP(page.draw(name, large));
         caption(pdf, large, "Large: vectors stay sharp");
 
         sc::console::heading("The same form, small, mirrored and turned: written once");
-        const sc::rect small{sc::dist::mm(20), sc::dist::mm(170), sc::dist::mm(40), sc::dist::mm(30)};
+        const sc::rect small{mm(20), mm(170), mm(40), mm(30)};
         SC_STEP(page.draw(name, small));
         caption(pdf, small, "Small");
-        const sc::rect mirrored{sc::dist::mm(80), sc::dist::mm(170), sc::dist::mm(40), sc::dist::mm(30)};
+        const sc::rect mirrored{mm(80), mm(170), mm(40), mm(30)};
         SC_STEP(page.draw(name, filling(mirrored).then(sc::transform::flip_horizontal(mirrored.center().x()))));
         caption(pdf, mirrored, "Mirrored");
-        const sc::rect turned{sc::dist::mm(140), sc::dist::mm(170), sc::dist::mm(40), sc::dist::mm(30)};
+        const sc::rect turned{mm(140), mm(170), mm(40), mm(30)};
         SC_STEP(page.draw(name, filling(turned).then(sc::transform::rotate(-15, turned.center()))));
         caption(pdf, turned, "Turned");
 
@@ -81,7 +84,7 @@ int main(int argc, char **argv) {
             <circle cx="44" cy="40" r="26" fill="#e9c46a" fill-opacity="0.85"/>
             <text x="84" y="50" font-family="Helvetica" font-weight="bold" font-size="24" fill="#ffffff">sc-pdflite</text>
         </svg>)svg");
-        const sc::rect badge_box{sc::dist::mm(65), sc::dist::mm(225), sc::dist::mm(80), sc::dist::mm(80) * 80 / 240};
+        const sc::rect badge_box{mm(65), mm(225), mm(80), mm(80) * 80 / 240};
         SC_STEP(page.draw(pdf.image(badge), badge_box));
         caption(pdf, badge_box, "From SVG text");
 
