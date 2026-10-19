@@ -33,7 +33,7 @@ Values are checked as they're written: a number that isn't finite, a page side r
 
 Positions are the same as on sc-graphics' canvas: points (1/72 inch) from the page's top-left
 corner, y down, and areas are sc-core's `sc::rect`. Positions and sizes are `sc::distance`:
-`sc::mm(10)`, `sc::inch(1)` or a plain number of points, mixed as you like. They're turned into PDF's own (y up from
+`sc::dist::mm(10)`, `sc::dist::inch(1)` or a plain number of points, mixed as you like. They're turned into PDF's own (y up from
 the bottom) as they're written, transforms included.
 
 Each part has its own header (and source), to work on and include alone: `pdflite/object.h`
@@ -76,7 +76,7 @@ page.end_text();
 const auto serif = pdf.standard_font("Times-Roman");
 page.begin_text();
 page.font(serif, 13);
-page.text_position(sc::inch(1), 122); // sc::mm, sc::inch or a plain number of points
+page.text_position(sc::dist::inch(1), 122); // a unit from sc::dist, or a plain number of points
 SC_STEP(page.show(*sc::pdflite::document::win_ansi("Strict PDF 1.7, no library but zlib: caf\xC3\xA9, \xE2\x82\xAC 12, (brackets) and \\.")));
 page.end_text();
 
@@ -85,7 +85,7 @@ page.save();
 page.fill_colour(0.85, 0.93, 0.98);
 page.stroke_colour(0.16, 0.44, 0.59);
 page.line_width(2);
-SC_STEP(page.rectangle(sc::mm(25.4), 162, sc::mm(77.6), 120)); // left, top, width, height
+SC_STEP(page.rectangle(sc::dist::mm(25.4), 162, sc::dist::mm(77.6), 120)); // left, top, width, height
 SC_STEP(page.fill_and_stroke());
 page.fill_colour(0.93, 0.42, 0.3);
 page.move(320, 282);

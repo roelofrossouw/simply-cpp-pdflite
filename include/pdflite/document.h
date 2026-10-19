@@ -27,7 +27,7 @@ namespace sc::pdflite {
     // information dictionary. It starts with one page, the current one.
     class document {
     public:
-        // Any sc::distance (sc::mm, sc::inch, or points). Throws std::invalid_argument for a size
+        // Any sc::distance (sc::dist::mm, sc::dist::inch, or points). Throws std::invalid_argument for a size
         // readers can't show (ISO 32000-1 annex C: 3 to 14,400 points), std::runtime_error when the
         // file can't be created.
         document(const std::filesystem::path &path, sc::distance width, sc::distance height);

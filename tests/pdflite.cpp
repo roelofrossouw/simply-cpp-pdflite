@@ -286,20 +286,20 @@ int main() {
     SECTION("Distances: millimetres and inches, written as points");
     const auto units_file = output() / "units.pdf";
     {
-        document pdf{units_file, sc::mm(210), sc::mm(297)}; // A4 to the millimetre
+        document pdf{units_file, sc::dist::mm(210), sc::dist::mm(297)}; // A4 to the millimetre
         CHECK_NEAR(pdf.width(), 595.2756, 1e-4);
         auto &page = pdf.page_content();
-        page.line_width(sc::mm(0.5));
-        page.rectangle(sc::mm(10), sc::mm(10), sc::inch(1), 72); // mixed with a plain number of points
+        page.line_width(sc::dist::mm(0.5));
+        page.rectangle(sc::dist::mm(10), sc::dist::mm(10), sc::dist::inch(1), 72); // mixed with a plain number of points
         page.stroke();
         const auto font = pdf.standard_font("Helvetica");
         page.begin_text();
-        page.font(font, sc::mm(5));
-        page.text_position(sc::inch(1), sc::inch(1));
+        page.font(font, sc::dist::mm(5));
+        page.text_position(sc::dist::inch(1), sc::dist::inch(1));
         page.show("An inch in");
         page.end_text();
-        pdf.link(sc::rect{sc::mm(10), sc::mm(10), sc::inch(1), 72}, "https://example.com");
-        pdf.bookmark("A centimetre down", 1, sc::mm(10));
+        pdf.link(sc::rect{sc::dist::mm(10), sc::dist::mm(10), sc::dist::inch(1), 72}, "https://example.com");
+        pdf.bookmark("A centimetre down", 1, sc::dist::mm(10));
         pdf.close();
     }
     {
