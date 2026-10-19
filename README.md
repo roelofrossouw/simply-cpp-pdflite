@@ -243,15 +243,14 @@ sc::pdflite::document pdf{output, sc::page_size::A4};
 
 sc::console::heading("A JPEG, written as it is: its header is read for the size and colours");
 const auto photo = sc::pdflite::jpeg::load(args.as<std::string>("photo"));
-SC_SHOW(photo.width());  // pixels
-SC_SHOW(photo.height());
+SC_SHOW(photo.size()); // in pixels
 SC_SHOW(photo.components()); // 3: RGB
 const auto cat = pdf.image(photo);
 SC_SHOW(cat); // its name in the page's resources
 
 sc::console::heading("Drawn into a box, keeping its proportions: draw(name, rect)");
 const sc::distance width = sc::dist::mm(80);
-const sc::distance height = width * photo.height() / photo.width();
+const sc::distance height = width * photo.size().height() / photo.size().width();
 const sc::rect original{sc::dist::mm(20), sc::dist::mm(25), width, height};
 auto &page = pdf.page_content();
 SC_STEP(page.draw(cat, original));
@@ -277,7 +276,7 @@ drawn.draw(sc::circle{{160, 160}, 110}, {sc::stroke{sc::color{0.16, 0.44, 0.59},
 drawn.draw(sc::rect{250, 70, 180, 180}, sc::appearance::filled(sc::color{0.93, 0.42, 0.3}));
 drawn.draw(sc::text{"sc-image", {40, 300}, sc::font::bold("sans-serif", 28)}, sc::color{0.1, 0.1, 0.1});
 const auto picture = sc::pdflite::jpeg(drawn.encoded("jpg", 90));
-SC_SHOW(picture.width());
+SC_SHOW(picture.size());
 const sc::rect picture_box{sc::dist::mm(55), sc::dist::mm(190), sc::dist::mm(100), sc::dist::mm(100) * 320 / 480};
 SC_STEP(page.draw(pdf.image(picture), picture_box));
 caption(pdf, picture_box, "Drawn with sc-image, encoded as a JPEG");

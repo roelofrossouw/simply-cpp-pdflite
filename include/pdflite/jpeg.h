@@ -26,9 +26,7 @@ namespace sc::pdflite {
         explicit jpeg(std::string bytes);
 
         // In pixels.
-        [[nodiscard]] double width() const override { return width_; }
-
-        [[nodiscard]] double height() const override { return height_; }
+        [[nodiscard]] sc::size size() const override { return {width_, height_}; }
 
         // 1 (grey), 3 (RGB) or 4 (CMYK).
         [[nodiscard]] int components() const { return components_; }

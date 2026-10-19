@@ -80,12 +80,10 @@ namespace sc::pdflite {
         if (!(drawing_->page().width() > 0 && drawing_->page().height() > 0)) throw std::invalid_argument("sc::pdflite: an SVG drawing without a size");
     }
 
-    double svg::width() const { return drawing_->page().width(); }
-
-    double svg::height() const { return drawing_->page().height(); }
+    sc::size svg::size() const { return drawing_->page(); }
 
     void svg::write(file &out, const std::uint32_t id) const {
-        const double w = width(), h = height();
+        const double w = size().width(), h = size().height();
         // The drawing's own coordinates (y down) written y up in its box, [0 0 w h]; the form's
         // matrix makes that the unit square content::draw() places.
         content page{h};

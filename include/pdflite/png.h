@@ -27,9 +27,7 @@ namespace sc::pdflite {
         explicit png(std::string bytes);
 
         // In pixels.
-        [[nodiscard]] double width() const override;
-
-        [[nodiscard]] double height() const override;
+        [[nodiscard]] sc::size size() const override;
 
         // IHDR's: 1, 2, 4, 8 or 16 bits per sample; colour type 0 (grey), 2 (RGB), 3 (palette),
         // 4 (grey and alpha) or 6 (RGB and alpha).

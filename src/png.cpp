@@ -123,9 +123,7 @@ namespace sc::pdflite {
         data_ = std::move(parsed);
     }
 
-    double png::width() const { return data_->width; }
-
-    double png::height() const { return data_->height; }
+    sc::size png::size() const { return {data_->width, data_->height}; }
 
     int png::bit_depth() const { return data_->depth; }
 
