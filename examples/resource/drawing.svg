@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <!-- sc-pdflite-svg's drawing: a little scene of shapes, a transform, transparency, an even-odd
+       fill, a clip and text, made for the demo. -->
+  <rect x="0" y="0" width="400" height="300" fill="#dff1fb"/>
+  <rect x="0" y="230" width="400" height="70" fill="#7cc36e"/>
+  <g transform="translate(320 70)">
+    <circle r="32" fill="#f7c948"/>
+    <g stroke="#f7c948" stroke-width="5">
+      <line x1="42" y1="0" x2="58" y2="0"/>
+      <line x1="42" y1="0" x2="58" y2="0" transform="rotate(45)"/>
+      <line x1="42" y1="0" x2="58" y2="0" transform="rotate(90)"/>
+      <line x1="42" y1="0" x2="58" y2="0" transform="rotate(135)"/>
+      <line x1="42" y1="0" x2="58" y2="0" transform="rotate(180)"/>
+      <line x1="42" y1="0" x2="58" y2="0" transform="rotate(225)"/>
+      <line x1="42" y1="0" x2="58" y2="0" transform="rotate(270)"/>
+      <line x1="42" y1="0" x2="58" y2="0" transform="rotate(315)"/>
+    </g>
+  </g>
+  <g fill="#ffffff" fill-opacity="0.8">
+    <circle cx="90" cy="70" r="26"/>
+    <circle cx="120" cy="58" r="32"/>
+    <circle cx="152" cy="72" r="24"/>
+  </g>
+  <rect x="90" y="140" width="140" height="100" fill="#e76f51" stroke="#5c2a1d" stroke-width="3"/>
+  <path d="M75 145 L160 85 L245 145 Z" fill="#8d5524" stroke="#5c2a1d" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M110 165 h40 v40 h-40 Z M118 173 h24 v24 h-24 Z" fill="#264653" fill-rule="evenodd"/>
+  <rect x="180" y="180" width="32" height="60" fill="#264653"/>
+  <clipPath id="pond"><ellipse cx="320" cy="262" rx="60" ry="22"/></clipPath>
+  <g clip-path="url(#pond)">
+    <rect x="250" y="230" width="140" height="70" fill="#4a90c2"/>
+    <rect x="250" y="250" width="140" height="6" fill="#ffffff" fill-opacity="0.5"/>
+    <rect x="250" y="266" width="140" height="6" fill="#ffffff" fill-opacity="0.5"/>
+  </g>
+  <text x="20" y="285" font-family="Helvetica" font-weight="bold" font-size="18" fill="#1d3557">A house in vectors</text>
+</svg>

@@ -94,6 +94,9 @@ int main(int argc, char **argv) {
         caption(pdf, picture_box, "Drawn with sc-image, encoded as a JPEG");
 
         pdf.info("Title", "sc-pdflite: JPEG images");
+        pdf.info("Author", "Roelof Rossouw");
+        pdf.info("Subject", "A JPEG photo as it is, mirrored, turned and scaled, and a picture drawn with sc-image");
+        pdf.info("Creator", "sc-pdflite-images");
         SC_STEP(pdf.close());
         SC_SHOW(std::filesystem::file_size(output)); // the photo is in it once, though drawn four times
         // [/readme]

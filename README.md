@@ -134,6 +134,9 @@ second.text_position(72, 82);
 second.show("Page two, in Courier.");
 second.end_text();
 SC_STEP(pdf.info("Title", "sc-pdflite demo"));
+SC_STEP(pdf.info("Author", "Roelof Rossouw"));
+SC_STEP(pdf.info("Subject", "Text in the built-in fonts, shapes and clipping, on two pages"));
+SC_STEP(pdf.info("Creator", "sc-pdflite-demo"));
 SC_STEP(pdf.close());
 SC_SHOW(std::filesystem::file_size(output));
 ```
@@ -185,6 +188,9 @@ for (std::size_t i = 0; i < chapters.size(); ++i) {
     pdf.bookmark("Section " + std::to_string(i + 1) + ".2", i + 2, top + 285, 1);
 }
 pdf.info("Title", "sc-pdflite: links and bookmarks");
+pdf.info("Author", "Roelof Rossouw");
+pdf.info("Subject", "A contents page linking to its chapters, links back, a web link and nested bookmarks");
+pdf.info("Creator", "sc-pdflite-links");
 SC_STEP(pdf.close());
 SC_SHOW(std::filesystem::file_size(output)); // bytes
 ```
@@ -222,6 +228,9 @@ SC_STEP(pdf.link(sc::rect{sc::dist::mm(25), sc::dist::mm(25), sc::dist::mm(32), 
 SC_STEP(pdf.bookmark("A4 portrait", 1));
 SC_STEP(pdf.bookmark("A3 landscape", 2));
 pdf.info("Title", "sc-pdflite: pages of different sizes");
+pdf.info("Author", "Roelof Rossouw");
+pdf.info("Subject", "An A4 portrait page and an A3 landscape one in one file");
+pdf.info("Creator", "sc-pdflite-pages");
 SC_STEP(pdf.close());
 SC_SHOW(std::filesystem::file_size(output)); // bytes
 ```
@@ -279,6 +288,9 @@ SC_STEP(page.draw(pdf.image(picture), picture_box));
 caption(pdf, picture_box, "Drawn with sc-image, encoded as a JPEG");
 
 pdf.info("Title", "sc-pdflite: JPEG images");
+pdf.info("Author", "Roelof Rossouw");
+pdf.info("Subject", "A JPEG photo as it is, mirrored, turned and scaled, and a picture drawn with sc-image");
+pdf.info("Creator", "sc-pdflite-images");
 SC_STEP(pdf.close());
 SC_SHOW(std::filesystem::file_size(output)); // the photo is in it once, though drawn four times
 ```
@@ -288,6 +300,113 @@ The photo, `examples/resource/cat.jpg`, is "Cat is sitting on the wall" by Vyshn
 from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Cat_is_sitting_on_the_wall.jpg),
 under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) (public domain): Commons'
 960-pixel-wide copy, unchanged.
+
+## PNG images
+
+`sc-pdflite-png` draws PNGs over stripes, so their transparency shows: an alpha channel, the same
+PNG interlaced, a palette with a see-through colour, and an opaque one copied as it is. Its
+pictures are drawn by `examples/resource/make-demo-pngs.py` and installed with it. Its code,
+copied from `examples/sc-pdflite-png.cpp` at configure time:
+
+<!-- sc-example: examples/sc-pdflite-png.cpp -->
+```cpp
+sc::pdflite::document pdf{output, sc::page_size::A4};
+auto &page = pdf.page_content();
+stripes(page, sc::rect{sc::dist::mm(15), sc::dist::mm(15), sc::dist::mm(180), sc::dist::mm(200)});
+
+sc::console::heading("An alpha channel: decoded, its alpha written as a soft mask");
+const auto badge = sc::pdflite::png::load(folder / "badge.png");
+SC_SHOW(badge.size());
+SC_SHOW(badge.colour_type()); // 6: RGB and alpha
+SC_SHOW(badge.copied());      // false: an alpha channel has to be split off
+const sc::rect left{sc::dist::mm(25), sc::dist::mm(25), sc::dist::mm(70), sc::dist::mm(70)};
+SC_STEP(page.draw(pdf.image(badge), left));
+caption(pdf, left, "RGBA: the edge fades out");
+
+sc::console::heading("Interlaced (Adam7): the passes put back together");
+const auto interlaced = sc::pdflite::png::load(folder / "badge-interlaced.png");
+SC_SHOW(interlaced.interlaced());
+const sc::rect right{sc::dist::mm(115), sc::dist::mm(25), sc::dist::mm(70), sc::dist::mm(70)};
+SC_STEP(page.draw(pdf.image(interlaced), right));
+caption(pdf, right, "The same, interlaced");
+
+sc::console::heading("A palette with a see-through colour (tRNS)");
+const auto stamp = sc::pdflite::png::load(folder / "stamp.png");
+SC_SHOW(stamp.colour_type()); // 3: a palette
+SC_SHOW(stamp.transparent()); // its colour 0 is see-through
+const sc::rect middle{sc::dist::mm(70), sc::dist::mm(115), sc::dist::mm(70), sc::dist::mm(70)};
+SC_STEP(page.draw(pdf.image(stamp), middle));
+caption(pdf, middle, "A palette, its first colour see-through");
+
+sc::console::heading("Without transparency, a PNG is copied as it is: nothing decoded");
+const auto gradient = sc::pdflite::png::load(folder / "gradient.png");
+SC_SHOW(gradient.copied()); // true: its compressed data goes in with PNG's own predictors
+const sc::rect below{sc::dist::mm(45), sc::dist::mm(230), sc::dist::mm(120), sc::dist::mm(40)};
+SC_STEP(page.draw(pdf.image(gradient), below));
+caption(pdf, below, "RGB without transparency: copied as it is");
+
+pdf.info("Title", "sc-pdflite: PNG images");
+pdf.info("Author", "Roelof Rossouw");
+pdf.info("Subject", "PNG images with an alpha channel, interlaced, and a palette with a see-through colour, over stripes");
+pdf.info("Creator", "sc-pdflite-png");
+SC_STEP(pdf.close());
+SC_SHOW(std::filesystem::file_size(output)); // bytes
+```
+<!-- /sc-example -->
+
+## SVG drawings
+
+`sc-pdflite-svg` draws a scene from an SVG file (shapes, a transform, transparency, an even-odd
+fill, a clip and text) large, small, mirrored and turned, all one form, and a badge from SVG
+text. Its drawing, `examples/resource/drawing.svg`, was made for it and is installed with it. Its
+code, copied from `examples/sc-pdflite-svg.cpp` at configure time:
+
+<!-- sc-example: examples/sc-pdflite-svg.cpp -->
+```cpp
+sc::pdflite::document pdf{output, sc::page_size::A4};
+auto &page = pdf.page_content();
+
+sc::console::heading("An SVG file, read by sc-graphics: a form of vectors, drawn like a picture");
+const auto scene = sc::pdflite::svg::load(file);
+SC_SHOW(scene.size()); // the drawing's own units
+SC_SHOW(scene.drawing().items().size());
+const auto name = pdf.image(scene);
+SC_SHOW(name);
+
+const sc::distance width = sc::dist::mm(170);
+const sc::rect large{sc::dist::mm(20), sc::dist::mm(20), width, width * scene.size().height() / scene.size().width()};
+SC_STEP(page.draw(name, large));
+caption(pdf, large, "Large: vectors stay sharp");
+
+sc::console::heading("The same form, small, mirrored and turned: written once");
+const sc::rect small{sc::dist::mm(20), sc::dist::mm(170), sc::dist::mm(40), sc::dist::mm(30)};
+SC_STEP(page.draw(name, small));
+caption(pdf, small, "Small");
+const sc::rect mirrored{sc::dist::mm(80), sc::dist::mm(170), sc::dist::mm(40), sc::dist::mm(30)};
+SC_STEP(page.draw(name, filling(mirrored).then(sc::transform::flip_horizontal(mirrored.center().x()))));
+caption(pdf, mirrored, "Mirrored");
+const sc::rect turned{sc::dist::mm(140), sc::dist::mm(170), sc::dist::mm(40), sc::dist::mm(30)};
+SC_STEP(page.draw(name, filling(turned).then(sc::transform::rotate(-15, turned.center()))));
+caption(pdf, turned, "Turned");
+
+sc::console::heading("SVG text, parsed: a badge with transparency and text");
+const auto badge = sc::pdflite::svg::parse(R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80">
+    <rect x="4" y="4" width="232" height="72" rx="36" fill="#264653"/>
+    <circle cx="44" cy="40" r="26" fill="#e9c46a" fill-opacity="0.85"/>
+    <text x="84" y="50" font-family="Helvetica" font-weight="bold" font-size="24" fill="#ffffff">sc-pdflite</text>
+</svg>)svg");
+const sc::rect badge_box{sc::dist::mm(65), sc::dist::mm(225), sc::dist::mm(80), sc::dist::mm(80) * 80 / 240};
+SC_STEP(page.draw(pdf.image(badge), badge_box));
+caption(pdf, badge_box, "From SVG text");
+
+pdf.info("Title", "sc-pdflite: SVG drawings");
+pdf.info("Author", "Roelof Rossouw");
+pdf.info("Subject", "SVG drawings as vectors: large, small, mirrored, turned, and a badge from SVG text");
+pdf.info("Creator", "sc-pdflite-svg");
+SC_STEP(pdf.close());
+SC_SHOW(std::filesystem::file_size(output)); // bytes: the scene is in it once
+```
+<!-- /sc-example -->
 
 ## Checking the files
 

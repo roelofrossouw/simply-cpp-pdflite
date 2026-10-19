@@ -96,6 +96,9 @@ int main(int argc, char **argv) {
         second.show("Page two, in Courier.");
         second.end_text();
         SC_STEP(pdf.info("Title", "sc-pdflite demo"));
+        SC_STEP(pdf.info("Author", "Roelof Rossouw"));
+        SC_STEP(pdf.info("Subject", "Text in the built-in fonts, shapes and clipping, on two pages"));
+        SC_STEP(pdf.info("Creator", "sc-pdflite-demo"));
         SC_STEP(pdf.close());
         SC_SHOW(std::filesystem::file_size(output));
         // [/readme]
