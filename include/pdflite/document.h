@@ -8,6 +8,7 @@
 #include <distance.h>
 #include <page.h>
 #include <rect.h>
+#include <standard_font.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -64,12 +65,10 @@ namespace sc::pdflite {
         content &page_content();
 
         // The resource name ("F1") of a built-in font in the current page's resources, adding it
-        // there (and to the file, once) the first time: one of the twelve Latin standard fonts
-        // ("Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
-        // "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic", "Courier",
-        // "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique"), written in WinAnsiEncoding.
-        // Throws std::invalid_argument for another name.
-        std::string standard_font(std::string_view base_font);
+        // there (and to the file, once) the first time: one of sc-graphics' twelve Latin standard
+        // fonts (sc::standard_font::face::helvetica_bold, ...), written in WinAnsiEncoding. Their
+        // metrics are sc::standard_font's: sc::standard_font{face}.width(text, size).
+        std::string standard_font(sc::standard_font::face which);
 
         // UTF-8 text in WinAnsiEncoding, the built-in fonts' bytes; nullopt when a character isn't
         // in it. Throws std::invalid_argument on malformed UTF-8.
@@ -109,7 +108,7 @@ namespace sc::pdflite {
         struct page_state {
             std::uint32_t id;
             pdflite::content content;
-            std::map<std::string, std::string> fonts; // base font: its resource name here
+            std::map<sc::standard_font::face, std::string> fonts; // each font: its resource name here
             struct link {
                 array rect;                         // [left bottom right top], in PDF's coordinates
                 std::optional<pdflite::string> uri; // a URI action's, or else a page and a top
@@ -142,7 +141,7 @@ namespace sc::pdflite {
         std::uint32_t pages_id_;
         std::vector<page_state> pages_;
         std::size_t current_ = 0;
-        std::map<std::string, std::uint32_t> fonts_; // base font: its object
+        std::map<sc::standard_font::face, std::uint32_t> fonts_; // each font: its object
         std::map<std::string, pdflite::string> info_;
         std::vector<outline_item> outline_;
     };

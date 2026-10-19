@@ -188,20 +188,16 @@ int main() {
         document pdf{fonts_file, 595.2756, 841.8898}; // any size in points: A4 to the hundredth of a millimetre
         auto &page = pdf.page_content();
         double y = 42; // from the top
-        for (const char *font: {"Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
-                                "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
-                                "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique"}) {
+        for (const auto font: sc::standard_font::faces) {
             const auto resource = pdf.standard_font(font);
             page.begin_text();
             page.font(resource, 14);
             page.text_position(50, y);
-            page.show(*document::win_ansi(std::string{font} + ": Caf\xC3\xA9 (\xE2\x82\xAC 5) \\ fin"));
+            page.show(*document::win_ansi(std::string{sc::standard_font::name(font)} + ": Caf\xC3\xA9 (\xE2\x82\xAC 5) \\ fin"));
             page.end_text();
             y += 24;
         }
-        CHECK_EQ(pdf.standard_font("Helvetica"), std::string{"F1"}); // the same font, the same name
-        CHECK_THROWS_AS(pdf.standard_font("Arial"), std::invalid_argument);
-        CHECK_THROWS_AS(pdf.standard_font("Symbol"), std::invalid_argument); // not WinAnsiEncoding
+        CHECK_EQ(pdf.standard_font(sc::standard_font::face::helvetica), std::string{"F1"}); // the same font, the same name
         pdf.info("Title", "Built-in fonts \xE2\x80\x93 a test"); // an en dash: UTF-16
         pdf.info("Author", "simply-cpp");
         pdf.close();
@@ -253,7 +249,7 @@ int main() {
         first.stroke();
         first.restore();
         pdf.set_page(3);
-        const auto font = pdf.standard_font("Courier");
+        const auto font = pdf.standard_font(sc::standard_font::face::courier);
         auto &third = pdf.page_content();
         third.begin_text();
         third.font(font, 10);
@@ -292,7 +288,7 @@ int main() {
         page.line_width(sc::dist::mm(0.5));
         page.rectangle(sc::dist::mm(10), sc::dist::mm(10), sc::dist::inch(1), 72); // mixed with a plain number of points
         page.stroke();
-        const auto font = pdf.standard_font("Helvetica");
+        const auto font = pdf.standard_font(sc::standard_font::face::helvetica);
         page.begin_text();
         page.font(font, sc::dist::mm(5));
         page.text_position(sc::dist::inch(1), sc::dist::inch(1));
@@ -319,7 +315,7 @@ int main() {
     const auto links_file = output() / "links.pdf";
     {
         document pdf{links_file, 595.2756, 841.8898};
-        const auto font = pdf.standard_font("Helvetica");
+        const auto font = pdf.standard_font(sc::standard_font::face::helvetica);
         auto &first = pdf.page_content();
         first.begin_text();
         first.font(font, 12);

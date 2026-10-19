@@ -16,7 +16,7 @@
 namespace {
     // A line of text in a built-in font, its baseline starting at (x, y), and the area it covers,
     // for a link.
-    sc::rect write_line(sc::pdflite::document &pdf, const std::string &font, const double size,
+    sc::rect write_line(sc::pdflite::document &pdf, const sc::standard_font::face font, const double size,
                         const double x, const double y, const std::string &text) {
         auto &page = pdf.page_content();
         page.begin_text();
@@ -24,9 +24,8 @@ namespace {
         page.text_position(x, y);
         page.show(*sc::pdflite::document::win_ansi(text));
         page.end_text();
-        const auto metrics = sc::standard_font::of(sc::font{font.starts_with("Times") ? "Times" : "Helvetica", size,
-                                                            font.ends_with("Bold") ? 700 : 400});
-        return {x, y - metrics->ascender(size), metrics->width(text, size), metrics->ascender(size) + metrics->descender(size)};
+        const sc::standard_font metrics{font};
+        return {x, y - metrics.ascender(size), metrics.width(text, size), metrics.ascender(size) + metrics.descender(size)};
     }
 }
 
@@ -55,23 +54,23 @@ int main(int argc, char **argv) {
 
         sc::console::heading("The contents page: each line a link to its chapter (link(area, page, top))");
         pdf.set_page(1);
-        write_line(pdf, "Helvetica-Bold", 24, 72, top, "Contents");
+        write_line(pdf, sc::standard_font::face::helvetica_bold, 24, 72, top, "Contents");
         for (std::size_t i = 0; i < chapters.size(); ++i) {
-            const auto line = write_line(pdf, "Times-Roman", 14, 90, top + 50 + 24.0 * i, std::to_string(i + 1) + ". " + chapters[i]);
+            const auto line = write_line(pdf, sc::standard_font::face::times_roman, 14, 90, top + 50 + 24.0 * i, std::to_string(i + 1) + ". " + chapters[i]);
             SC_STEP(pdf.link(line, i + 2, top - 20)); // the chapter's page, from just above its heading
         }
 
         sc::console::heading("A web link (link(area, url)): the address is written in ASCII, percent-encoded");
-        const auto site = write_line(pdf, "Helvetica", 11, 72, pdf.height() - 100, "simply-cpp on GitHub");
+        const auto site = write_line(pdf, sc::standard_font::face::helvetica, 11, 72, pdf.height() - 100, "simply-cpp on GitHub");
         SC_STEP(pdf.link(site, "https://github.com/roelofrossouw/simply-cpp"));
 
         sc::console::heading("Chapters, each with a way back to the contents");
         for (std::size_t i = 0; i < chapters.size(); ++i) {
             pdf.set_page(i + 2);
-            write_line(pdf, "Helvetica-Bold", 20, 72, top, std::to_string(i + 1) + ". " + chapters[i]);
-            write_line(pdf, "Times-Roman", 12, 72, top + 40, "Section " + std::to_string(i + 1) + ".1");
-            write_line(pdf, "Times-Roman", 12, 72, top + 300, "Section " + std::to_string(i + 1) + ".2");
-            const auto back = write_line(pdf, "Helvetica", 10, 72, pdf.height() - 60, "Back to the contents");
+            write_line(pdf, sc::standard_font::face::helvetica_bold, 20, 72, top, std::to_string(i + 1) + ". " + chapters[i]);
+            write_line(pdf, sc::standard_font::face::times_roman, 12, 72, top + 40, "Section " + std::to_string(i + 1) + ".1");
+            write_line(pdf, sc::standard_font::face::times_roman, 12, 72, top + 300, "Section " + std::to_string(i + 1) + ".2");
+            const auto back = write_line(pdf, sc::standard_font::face::helvetica, 10, 72, pdf.height() - 60, "Back to the contents");
             pdf.link(back, 1); // the top of the contents page
         }
 

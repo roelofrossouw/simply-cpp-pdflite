@@ -13,15 +13,6 @@
 
 namespace sc::pdflite {
     namespace {
-        // The standard Type 1 fonts with Latin text (9.6.2.2); Symbol and ZapfDingbats have their
-        // own encodings, not WinAnsiEncoding, so they wait until they're needed.
-        constexpr std::array<std::string_view, 12> latin_fonts{
-            "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
-            "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
-            "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique"};
-    }
-
-    namespace {
         // The path, once the page size is one readers can show (checked before the file is made).
         const std::filesystem::path &checked(const std::filesystem::path &path, const sc::distance width, const sc::distance height) {
             for (const double side: {width.points(), height.points()})
@@ -92,16 +83,13 @@ namespace sc::pdflite {
         return pages_[current_].content;
     }
 
-    std::string document::standard_font(const std::string_view base_font) {
+    std::string document::standard_font(const sc::standard_font::face which) {
         check_open();
-        if (std::ranges::find(latin_fonts, base_font) == latin_fonts.end())
-            throw std::invalid_argument("sc::pdflite: " + std::string{base_font} + " isn't one of the built-in fonts");
         auto &page = pages_[current_];
-        const std::string key{base_font};
-        if (const auto found = page.fonts.find(key); found != page.fonts.end()) return found->second;
-        if (!fonts_.contains(key)) fonts_[key] = file_.allocate();
+        if (const auto found = page.fonts.find(which); found != page.fonts.end()) return found->second;
+        if (!fonts_.contains(which)) fonts_[which] = file_.allocate();
         const std::string resource = "F" + std::to_string(page.fonts.size() + 1);
-        page.fonts[key] = resource;
+        page.fonts[which] = resource;
         return resource;
     }
 
@@ -204,7 +192,7 @@ namespace sc::pdflite {
             dictionary resources;
             if (!page.fonts.empty()) {
                 dictionary fonts;
-                for (const auto &[base_font, resource]: page.fonts) fonts.add(resource, reference{fonts_.at(base_font)});
+                for (const auto &[which, resource]: page.fonts) fonts.add(resource, reference{fonts_.at(which)});
                 resources.add("Font", fonts);
             }
             // Link annotations (12.5.6.5): printed (/F 4), no border.
@@ -227,8 +215,10 @@ namespace sc::pdflite {
         }
         file_.write(pages_id_, dictionary{{"Type", name{"Pages"}}, {"Kids", kids}, {"Count", pages_.size()}});
 
-        for (const auto &[base_font, id]: fonts_)
-            file_.write(id, dictionary{{"Type", name{"Font"}}, {"Subtype", name{"Type1"}}, {"BaseFont", name{base_font}},
+        // The standard Type 1 fonts (9.6.2.2): Symbol and ZapfDingbats, with their own encodings,
+        // aren't among sc::standard_font's faces.
+        for (const auto &[which, id]: fonts_)
+            file_.write(id, dictionary{{"Type", name{"Font"}}, {"Subtype", name{"Type1"}}, {"BaseFont", name{sc::standard_font::name(which)}},
                                        {"Encoding", name{"WinAnsiEncoding"}}});
 
         const std::uint32_t outlines = write_outline();
