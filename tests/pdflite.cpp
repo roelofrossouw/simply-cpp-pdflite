@@ -5,6 +5,8 @@
 
 #include "sc_test.h"
 
+#include <console.h>
+
 #include <zlib.h>
 
 #include <cmath>
@@ -371,8 +373,9 @@ int main() {
     {
         {
             document landscape{fs::temp_directory_path() / "sc-pdflite-landscape.pdf", sc::page_size::A5, sc::orientation::landscape};
-            CHECK_EQ(landscape.width(), 595.0); // sc-graphics' A5, turned: 595 x 420 points
-            CHECK_EQ(landscape.height(), 420.0);
+            CHECK_NEAR(landscape.width(), 595.2756, 1e-4); // A5 turned: 210 x 148 mm
+            CHECK_NEAR(landscape.height(), 419.5276, 1e-4);
+            CHECK_EQ(sc::console::format(static_cast<sc::dist::mm>(landscape.height())), std::string{"148mm"});
             landscape.close();
             fs::remove(fs::temp_directory_path() / "sc-pdflite-landscape.pdf");
         }
