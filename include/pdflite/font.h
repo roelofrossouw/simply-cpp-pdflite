@@ -52,7 +52,10 @@ namespace sc::pdflite {
 
         [[nodiscard]] sc::distance descender(sc::distance size) const; // positive: below the baseline
 
+        // The cap and x heights: OS/2's, or else how high an H and an x rise.
         [[nodiscard]] sc::distance cap_height(sc::distance size) const;
+
+        [[nodiscard]] sc::distance x_height(sc::distance size) const;
 
         [[nodiscard]] std::string_view category() const override { return "Font"; }
 

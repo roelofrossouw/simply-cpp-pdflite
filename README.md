@@ -1,9 +1,8 @@
 # simply-cpp-pdflite
 
 simply-cpp's own PDF writer, in C++20: strict ISO 32000-1 (PDF 1.7), with no library but zlib.
-It's bare bones for now, for quick PDFs and for growing the writer without touching
-[sc-pdf](https://github.com/roelofrossouw/simply-cpp-pdf), which writes with PDFHummus: when
-it's grown enough, sc-pdflite can become sc-pdf's engine.
+It's the engine under [sc-pdf](https://github.com/roelofrossouw/simply-cpp-pdf), whose
+`sc::pdf` canvas draws through it; use sc-pdflite directly for PDFs object by object.
 
 What it writes so far:
 
@@ -15,7 +14,8 @@ What it writes so far:
   (`sc::page_size::A4`, A3, A5, Letter, Legal, and `sc::orientation`, as sc-pdf and sc-mupdf
   take them) or any width and height in points.
 - **Content:** paths (lines, curves, rectangles), RGB fill and stroke colours, line width,
-  transforms, clipping (nonzero and even-odd), graphics states and text. The content stream
+  transforms, clipping (nonzero and even-odd), graphics states and text, and transparency
+  (`document::graphics_state(fill_alpha, stroke_alpha)`, an ExtGState). The content stream
   refuses what PDF forbids, throwing `std::logic_error`: an unbalanced `q`/`Q`, a path inside a
   text object, text without a font, anything between `W` and the path's painting operator.
 - **PDF's built-in fonts:** the twelve Latin standard fonts (Helvetica, Times and Courier, with
@@ -39,7 +39,7 @@ What it writes so far:
   (fontconfig) or from a file, embedded as a subset of the glyphs used: a TrueType program made
   from FreeType's outlines (a variable font's at the instance asked for, a CFF font's curves turned
   quadratic), with a ToUnicode map so the text can be copied and searched, and the font's own
-  widths. Measured with `width()`, `ascender()`, `descender()`, `cap_height()`.
+  widths. Measured with `width()`, `ascender()`, `descender()`, `cap_height()`, `x_height()`.
 - **Passwords and permissions** (`pdflite/encryption.h`, `document::protect()`): AES-256
   (revision 6), every string and stream encrypted, a user password to open the file (or none)
   and an owner password for every right; printing, copying, changing, commenting, forms and

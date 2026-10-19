@@ -118,6 +118,19 @@ namespace sc::pdflite {
         return resource;
     }
 
+    std::string document::graphics_state(const double fill_alpha, const double stroke_alpha) {
+        check_open();
+        if (!(fill_alpha >= 0 && fill_alpha <= 1) || !(stroke_alpha >= 0 && stroke_alpha <= 1))
+            throw std::invalid_argument("sc::pdflite: an alpha outside 0 to 1");
+        const std::pair key{fill_alpha, stroke_alpha};
+        auto &page = pages_[current_];
+        if (const auto found = page.states.find(key); found != page.states.end()) return found->second;
+        if (!states_.contains(key)) states_[key] = file_.allocate();
+        const std::string resource = "GS" + std::to_string(page.states.size() + 1);
+        page.states[key] = resource;
+        return resource;
+    }
+
     std::string document::image(const pdflite::image &picture) {
         check_open();
         const void *key = picture.identity();
@@ -248,6 +261,11 @@ namespace sc::pdflite {
                 for (const auto &[key, resource]: page.images) xobjects.add(resource, reference{images_.at(key).id});
                 resources.add("XObject", xobjects);
             }
+            if (!page.states.empty()) {
+                dictionary states;
+                for (const auto &[key, resource]: page.states) states.add(resource, reference{states_.at(key)});
+                resources.add("ExtGState", states);
+            }
             // Link annotations (12.5.6.5): printed (/F 4), no border.
             array annotations;
             for (const auto &each: page.links) {
@@ -273,6 +291,9 @@ namespace sc::pdflite {
         for (const auto &[which, id]: fonts_)
             file_.write(id, dictionary{{"Type", name{"Font"}}, {"Subtype", name{"Type1"}}, {"BaseFont", name{sc::standard_font::name(which)}},
                                        {"Encoding", name{"WinAnsiEncoding"}}});
+
+        for (const auto &[alphas, id]: states_)
+            file_.write(id, dictionary{{"Type", name{"ExtGState"}}, {"ca", alphas.first}, {"CA", alphas.second}});
 
         for (const auto &[key, written]: images_) written.picture->write(file_, written.id);
         // Last: the subsets hold every glyph the pages used.
