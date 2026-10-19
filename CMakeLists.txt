@@ -20,7 +20,7 @@ set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
 add_sc_object(pdflite
-        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp
+        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/image.cpp
         LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB
         PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB)
 
@@ -39,6 +39,16 @@ endif ()
 add_sc_example(sc-pdflite-demo)
 add_sc_example(sc-pdflite-links)
 add_sc_example(sc-pdflite-pages)
+
+# The images demo also draws a picture with sc-image (OpenCV), so it's built when sc-image is
+# installed and isn't installed itself: the runtime package stays free of OpenCV.
+find_package(sc-image QUIET)
+if (sc-image_FOUND AND SC_BUILD_EXAMPLES)
+    add_executable(sc-pdflite-images examples/sc-pdflite-images.cpp)
+    target_link_libraries(sc-pdflite-images PRIVATE sc::sc-pdflite-shared sc::sc-image-shared)
+    target_compile_definitions(sc-pdflite-images PRIVATE SC_PDFLITE_EXAMPLE_PHOTO="${CMAKE_CURRENT_SOURCE_DIR}/examples/resource/cat.jpg")
+    sc_program_info(sc-pdflite-images)
+endif ()
 
 package_sc_module(
         DEV_DEPENDS "simply-cpp-dev (>= 1.16.0~)" "simply-cpp-graphics-dev (>= 6.2.0~)" zlib1g-dev)

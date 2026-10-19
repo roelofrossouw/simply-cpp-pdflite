@@ -150,6 +150,22 @@ namespace sc::pdflite {
         op("1 0 0 1 " + number(x) + " " + number(this->y(y)) + " Tm");
     }
 
+    void content::image(const std::string_view resource, const sc::transform &placement) {
+        outside_text("Do");
+        // The unit square is y up in PDF; the flip on both sides of the placement, and the square's
+        // own (v = 1 - t), give [a -b -c d (c + e) (h - d - f)].
+        const auto &m = placement;
+        op("q");
+        op(number(m.a()) + " " + number(-m.b()) + " " + number(-m.c()) + " " + number(m.d()) + " " + number(m.c() + m.e()) + " " +
+           number(height_ - m.d() - m.f()) + " cm");
+        op(name{resource}.write() + " Do");
+        op("Q");
+    }
+
+    void content::image(const std::string_view resource, const sc::rect &where) {
+        image(resource, sc::transform{where.width(), 0, 0, where.height(), where.left(), where.top()});
+    }
+
     void content::show(const std::string_view bytes) {
         if (!in_text_) throw std::logic_error("sc::pdflite: Tj outside a text object (BT first)");
         if (!font_set_) throw std::logic_error("sc::pdflite: Tj before a font is set (Tf)");

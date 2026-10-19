@@ -344,6 +344,82 @@ int main() {
         CHECK(contains(inflated_streams(file), "0 741.8898 1190.5512 100 re"));
     }
 
+    SECTION("JPEG headers: the size and colours read, what PDF can't take refused");
+    {
+        // A JPEG's start: SOI, segments, then a frame header (the image data after it isn't read).
+        const auto jpeg = [](const int frame, const int precision, const int height, const int width, const int components,
+                             const bool adobe = false) {
+            std::string bytes{"\xFF\xD8"};
+            bytes += std::string{"\xFF\xE0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00", 18};
+            if (adobe) bytes += std::string{"\xFF\xEE\x00\x0E" "Adobe" "\x00\x64\x00\x00\x00\x00\x00", 16};
+            bytes += static_cast<char>(0xFF);
+            bytes += static_cast<char>(frame);
+            const int length = 8 + 3 * components;
+            for (const int b: {length >> 8, length & 0xFF, precision, height >> 8, height & 0xFF, width >> 8, width & 0xFF, components})
+                bytes += static_cast<char>(b);
+            for (int c = 0; c < components; ++c) bytes += std::string{"\x01\x11\x00", 3};
+            return bytes + std::string{"\xFF\xD9", 2};
+        };
+        const auto rgb = image::jpeg(jpeg(0xC0, 8, 480, 640, 3));
+        CHECK_EQ(rgb.width(), 640);
+        CHECK_EQ(rgb.height(), 480);
+        CHECK_EQ(rgb.components(), 3);
+        CHECK_EQ(image::jpeg(jpeg(0xC2, 8, 10, 20, 1)).components(), 1); // progressive, grey
+        CHECK_EQ(image::jpeg(jpeg(0xC0, 8, 10, 20, 4, true)).components(), 4); // Adobe CMYK
+        CHECK_THROWS_AS(image::jpeg("not a JPEG"), std::invalid_argument);
+        CHECK_THROWS_AS(image::jpeg(jpeg(0xC3, 8, 10, 20, 3)), std::invalid_argument);  // lossless
+        CHECK_THROWS_AS(image::jpeg(jpeg(0xC9, 8, 10, 20, 3)), std::invalid_argument);  // arithmetic-coded
+        CHECK_THROWS_AS(image::jpeg(jpeg(0xC0, 12, 10, 20, 3)), std::invalid_argument); // 12-bit samples
+        CHECK_THROWS_AS(image::jpeg(jpeg(0xC0, 8, 0, 20, 3)), std::invalid_argument);   // the height later (DNL)
+        CHECK_THROWS_AS(image::jpeg(jpeg(0xC0, 8, 10, 20, 2)), std::invalid_argument);  // two components
+        CHECK_THROWS_AS(image::jpeg(std::string{"\xFF\xD8\xFF\xC0\x00", 5}), std::invalid_argument); // cut short
+        CHECK_THROWS_AS(image::load(output() / "no-such.jpg"), std::runtime_error);
+
+        // Written with its colour space, and CMYK from Adobe with the Decode array undoing its inversion.
+        const auto cmyk_file = fs::temp_directory_path() / "sc-pdflite-cmyk.pdf"; // the image data isn't real: not for the checkers
+        {
+            document pdf{cmyk_file, 200, 200};
+            pdf.page_content().image(pdf.image(image::jpeg(jpeg(0xC0, 8, 10, 20, 4, true))), sc::rect{0, 0, 20, 10});
+            pdf.close();
+        }
+        const auto cmyk = read(cmyk_file);
+        CHECK(contains(cmyk, "/Subtype /Image /Width 20 /Height 10 /ColorSpace /DeviceCMYK /BitsPerComponent 8 /Decode [1 0 1 0 1 0 1 0] /Filter /DCTDecode /Length"));
+        fs::remove(cmyk_file);
+    }
+
+    SECTION("JPEG images drawn: written once, placed through a transform");
+    const auto images_file = output() / "images.pdf";
+    {
+        const auto photo = image::load(SC_PDFLITE_TEST_PHOTO);
+        CHECK_EQ(photo.width(), 960);
+        CHECK_EQ(photo.height(), 640);
+        document pdf{images_file, sc::page_size::A4};
+        auto &page = pdf.page_content();
+        const auto name = pdf.image(photo);
+        CHECK_EQ(name, std::string{"Im1"});
+        CHECK_EQ(pdf.image(image{photo}), std::string{"Im1"}); // a copy: the same image
+        page.image(name, sc::rect{100, 100, 300, 200});
+        page.image(name, sc::transform{300, 0, 0, 200, 100, 400}.then(sc::transform::flip_horizontal(250)));
+        page.begin_text();
+        CHECK_THROWS_AS(page.image(name, sc::rect{0, 0, 10, 10}), std::logic_error); // not in a text object
+        page.end_text();
+        pdf.add_page();
+        pdf.page_content().image(pdf.image(photo), sc::rect{0, 0, 96, 64}); // on another page: written once still
+        pdf.close();
+    }
+    {
+        const auto file = read(images_file);
+        CHECK(structure_problem(file).empty());
+        std::size_t images = 0;
+        for (auto at = file.find("/Subtype /Image"); at != std::string::npos; at = file.find("/Subtype /Image", at + 1)) ++images;
+        CHECK_EQ(images, std::size_t{1});
+        CHECK(contains(file, "/Width 960 /Height 640 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length 105500"));
+        CHECK(contains(file, "/XObject << /Im1 "));
+        const auto streams = inflated_streams(file);
+        CHECK(contains(streams, "q\n300 0 0 200 100 541.8898 cm\n/Im1 Do\nQ")); // 841.8898 - 100 - 200
+        CHECK(contains(streams, "-300 0 0 200 400 241.8898 cm"));                 // mirrored about x = 250: 841.8898 - 200 - 400
+    }
+
     SECTION("Links and bookmarks");
     const auto links_file = output() / "links.pdf";
     {
