@@ -33,6 +33,9 @@ foreach (pdf IN LISTS pdfs)
         if (drawn)
             file(REMOVE ${drawn})
         endif ()
+        # Ubuntu's MuPDF is built without colour management and says so about any file; that
+        # isn't about the PDF, so it's the one message let through.
+        string(REPLACE "warning: ICC support is not available\n" "" err "${err}")
         set(bad FALSE)
         if (NOT status EQUAL 0 OR err MATCHES ".")
             set(bad TRUE)

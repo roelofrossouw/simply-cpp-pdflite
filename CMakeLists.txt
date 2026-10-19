@@ -19,7 +19,7 @@ set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
 add_sc_object(pdflite
-        SOURCES src/objects.cpp src/content.cpp
+        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp
         LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB
         PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB)
 

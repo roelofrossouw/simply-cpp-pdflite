@@ -27,6 +27,11 @@ Values are checked as they're written: a number that isn't finite, a page side r
 
 Coordinates are PDF's own: points (1/72 inch), y up from the bottom of the page.
 
+Each part has its own header (and source), to work on and include alone: `pdflite/object.h`
+(how values are written), `pdflite/file.h` (the file: objects, the cross-reference table,
+the trailer), `pdflite/content.h` (a page's content stream) and `pdflite/document.h` (pages,
+fonts, information). `pdflite.h` includes them all.
+
 **Documentation:** the [simply-cpp wiki](https://github.com/roelofrossouw/simply-cpp/wiki) has a [PDF guide](https://github.com/roelofrossouw/simply-cpp/wiki/PDF), plus [getting started](https://github.com/roelofrossouw/simply-cpp/wiki/Getting-Started) for the whole suite.
 
 ## Demo
