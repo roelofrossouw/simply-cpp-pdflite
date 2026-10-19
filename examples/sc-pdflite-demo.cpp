@@ -37,11 +37,11 @@ int main(int argc, char **argv) {
 
         sc::console::heading("Text: a built-in font, then BT ... ET");
         auto &page = pdf.page_content();
-        const auto bold = pdf.standard_font("Helvetica-Bold");
+        const auto bold = pdf.standard_font(sc::standard_font::face::helvetica_bold);
         SC_SHOW(bold); // its name in the page's resources
         const std::string heading = "simply-cpp pdflite";
-        const auto metrics = sc::standard_font::of(sc::font::bold("Helvetica", 28));
-        const sc::distance width = metrics->width(heading, 28);
+        const sc::standard_font metrics{sc::standard_font::face::helvetica_bold}; // Adobe's metrics for it
+        const sc::distance width = metrics.width(heading, 28);
         SC_SHOW(width); // Adobe's widths: lines are measured as readers draw them
         page.begin_text();
         page.font(bold, 28);
@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
         page.show(*sc::pdflite::document::win_ansi(heading));
         page.end_text();
 
-        const auto serif = pdf.standard_font("Times-Roman");
+        const auto serif = pdf.standard_font(sc::standard_font::face::times_roman);
         page.begin_text();
         page.font(serif, 13);
         page.text_position(sc::dist::inch(1), 122); // a unit from sc::dist, or a plain number of points
@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
         sc::console::heading("A second page, and the document's information");
         SC_STEP(pdf.add_page());
         auto &second = pdf.page_content();
-        const auto mono = pdf.standard_font("Courier");
+        const auto mono = pdf.standard_font(sc::standard_font::face::courier);
         second.begin_text();
         second.font(mono, 11);
         second.text_position(72, 82);

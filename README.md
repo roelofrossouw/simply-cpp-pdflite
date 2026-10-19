@@ -18,7 +18,8 @@ What it writes so far:
   refuses what PDF forbids, throwing `std::logic_error`: an unbalanced `q`/`Q`, a path inside a
   text object, text without a font, anything between `W` and the path's painting operator.
 - **PDF's built-in fonts:** the twelve Latin standard fonts (Helvetica, Times and Courier, with
-  their bold and italic styles), in WinAnsiEncoding; `document::win_ansi()` turns UTF-8 into it.
+  their bold and italic styles), named by sc-graphics' `sc::standard_font::face` enum (a typo
+  doesn't compile), in WinAnsiEncoding; `document::win_ansi()` turns UTF-8 into it.
   Their metrics are sc-graphics' `sc::standard_font`, so text is measured as readers draw it.
 - **The document's information:** title, author and the like, with Unicode, plus the creation
   date and producer.
@@ -62,11 +63,11 @@ SC_SHOW(static_cast<sc::dist::mm>(pdf.width())); // the same, in millimetres
 
 sc::console::heading("Text: a built-in font, then BT ... ET");
 auto &page = pdf.page_content();
-const auto bold = pdf.standard_font("Helvetica-Bold");
+const auto bold = pdf.standard_font(sc::standard_font::face::helvetica_bold);
 SC_SHOW(bold); // its name in the page's resources
 const std::string heading = "simply-cpp pdflite";
-const auto metrics = sc::standard_font::of(sc::font::bold("Helvetica", 28));
-const sc::distance width = metrics->width(heading, 28);
+const sc::standard_font metrics{sc::standard_font::face::helvetica_bold}; // Adobe's metrics for it
+const sc::distance width = metrics.width(heading, 28);
 SC_SHOW(width); // Adobe's widths: lines are measured as readers draw them
 page.begin_text();
 page.font(bold, 28);
@@ -74,7 +75,7 @@ page.text_position((pdf.width() - width) / 2, 82); // centred, the baseline 82 p
 page.show(*sc::pdflite::document::win_ansi(heading));
 page.end_text();
 
-const auto serif = pdf.standard_font("Times-Roman");
+const auto serif = pdf.standard_font(sc::standard_font::face::times_roman);
 page.begin_text();
 page.font(serif, 13);
 page.text_position(sc::dist::inch(1), 122); // a unit from sc::dist, or a plain number of points
@@ -115,7 +116,7 @@ SC_SHOW(page.complete()); // q balanced, no open text or path: ready to close
 sc::console::heading("A second page, and the document's information");
 SC_STEP(pdf.add_page());
 auto &second = pdf.page_content();
-const auto mono = pdf.standard_font("Courier");
+const auto mono = pdf.standard_font(sc::standard_font::face::courier);
 second.begin_text();
 second.font(mono, 11);
 second.text_position(72, 82);
@@ -145,23 +146,23 @@ SC_SHOW(pdf.page_count());
 
 sc::console::heading("The contents page: each line a link to its chapter (link(area, page, top))");
 pdf.set_page(1);
-write_line(pdf, "Helvetica-Bold", 24, 72, top, "Contents");
+write_line(pdf, sc::standard_font::face::helvetica_bold, 24, 72, top, "Contents");
 for (std::size_t i = 0; i < chapters.size(); ++i) {
-    const auto line = write_line(pdf, "Times-Roman", 14, 90, top + 50 + 24.0 * i, std::to_string(i + 1) + ". " + chapters[i]);
+    const auto line = write_line(pdf, sc::standard_font::face::times_roman, 14, 90, top + 50 + 24.0 * i, std::to_string(i + 1) + ". " + chapters[i]);
     SC_STEP(pdf.link(line, i + 2, top - 20)); // the chapter's page, from just above its heading
 }
 
 sc::console::heading("A web link (link(area, url)): the address is written in ASCII, percent-encoded");
-const auto site = write_line(pdf, "Helvetica", 11, 72, pdf.height() - 100, "simply-cpp on GitHub");
+const auto site = write_line(pdf, sc::standard_font::face::helvetica, 11, 72, pdf.height() - 100, "simply-cpp on GitHub");
 SC_STEP(pdf.link(site, "https://github.com/roelofrossouw/simply-cpp"));
 
 sc::console::heading("Chapters, each with a way back to the contents");
 for (std::size_t i = 0; i < chapters.size(); ++i) {
     pdf.set_page(i + 2);
-    write_line(pdf, "Helvetica-Bold", 20, 72, top, std::to_string(i + 1) + ". " + chapters[i]);
-    write_line(pdf, "Times-Roman", 12, 72, top + 40, "Section " + std::to_string(i + 1) + ".1");
-    write_line(pdf, "Times-Roman", 12, 72, top + 300, "Section " + std::to_string(i + 1) + ".2");
-    const auto back = write_line(pdf, "Helvetica", 10, 72, pdf.height() - 60, "Back to the contents");
+    write_line(pdf, sc::standard_font::face::helvetica_bold, 20, 72, top, std::to_string(i + 1) + ". " + chapters[i]);
+    write_line(pdf, sc::standard_font::face::times_roman, 12, 72, top + 40, "Section " + std::to_string(i + 1) + ".1");
+    write_line(pdf, sc::standard_font::face::times_roman, 12, 72, top + 300, "Section " + std::to_string(i + 1) + ".2");
+    const auto back = write_line(pdf, sc::standard_font::face::helvetica, 10, 72, pdf.height() - 60, "Back to the contents");
     pdf.link(back, 1); // the top of the contents page
 }
 
