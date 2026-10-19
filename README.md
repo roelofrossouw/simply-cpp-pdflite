@@ -20,8 +20,12 @@ What it writes so far:
   Their metrics are sc-graphics' `sc::standard_font`, so text is measured as readers draw it.
 - **The document's information:** title, author and the like, with Unicode, plus the creation
   date and producer.
+- **Links:** an area of a page that opens a URI (written in 7-bit ASCII, percent-encoded), or
+  goes to a page and a height on it, which needn't exist yet.
+- **Bookmarks:** the reader's outline, nested by level, with Unicode titles; the file opens with
+  it showing.
 
-Still to come: images (JPEG and PNG), links, bookmarks, then embedded fonts through FreeType.
+Still to come: images (JPEG and PNG), then embedded fonts through FreeType.
 Values are checked as they're written: a number that isn't finite, a page side readers can't show
 (outside 3 to 14,400 points) or malformed UTF-8 throws `std::invalid_argument`.
 
