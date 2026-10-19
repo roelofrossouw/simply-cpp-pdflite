@@ -10,6 +10,12 @@
 
 #include <zlib.h>
 
+#include <font.h>
+#include <font_face.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include FT_OUTLINE_H
+
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -20,7 +26,9 @@
 #include <array>
 #include <regex>
 #include <stdexcept>
+#include <iostream>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 using namespace sc::pdflite;
@@ -559,6 +567,116 @@ int main() {
         CHECK(contains(streams, "(Caf\\351 \\2005 ?) Tj"));          // \u00e9 and \u20ac in WinAnsi, \u0416 as '?'
         CHECK(contains(streams, "/Fm1 Do"));
         CHECK(contains(streams, "400 0 0 200 50 591.8898 cm"));         // the unit square into 400 x 200 at (50, 50)
+    }
+
+    SECTION("Embedded fonts: subsets read back by FreeType, glyph for glyph as the font's");
+    {
+        // The subset (FontFile2) of the first embedded font in a file.
+        const auto subset_of = [](const std::string &file) {
+            static const std::regex head{R"(/Length1 (\d+) /Length (\d+) /Filter /FlateDecode >>\nstream\n)"};
+            std::smatch found;
+            if (!std::regex_search(file, found, head)) return std::string{};
+            const auto length1 = std::stoul(found[1]), length = std::stoul(found[2]);
+            std::string program(length1, '\0');
+            uLongf size = length1;
+            const auto at = static_cast<std::size_t>(found.position() + found.length());
+            if (uncompress(reinterpret_cast<Bytef *>(program.data()), &size, reinterpret_cast<const Bytef *>(file.data() + at), length) != Z_OK) return std::string{};
+            return program;
+        };
+        // Whether every glyph of text in the subset has the original's advance and outline extent (to a
+        // unit), the subset's glyphs being numbered in order of first use.
+        const auto check = [&](const std::string &what, const std::filesystem::path &font_file, const long index, const std::string &text) {
+            const auto out = output() / ("font-" + what + ".pdf");
+            {
+                document pdf{out, sc::page_size::A5};
+                const auto embedded = font::load(font_file, index);
+                auto &page = pdf.page_content();
+                page.begin_text();
+                page.font(pdf.font(embedded), 20);
+                page.text_position(20, 60);
+                page.show(embedded.encode(text));
+                page.end_text();
+                pdf.close();
+            }
+            const auto file = read(out);
+            CHECK_MSG(structure_problem(file).empty(), what);
+            CHECK_MSG(contains(file, "/Subtype /Type0") && contains(file, "/Encoding /Identity-H") && contains(file, "/CIDToGIDMap /Identity"), what);
+            CHECK_MSG(contains(file, "/ToUnicode "), what);
+            const auto program = subset_of(file);
+            CHECK_MSG(!program.empty(), what + ": the subset");
+            FT_Library library;
+            FT_Init_FreeType(&library);
+            FT_Face original, subset;
+            CHECK(FT_New_Face(library, font_file.string().c_str(), index, &original) == 0);
+            CHECK_MSG(FT_New_Memory_Face(library, reinterpret_cast<const FT_Byte *>(program.data()), static_cast<FT_Long>(program.size()), 0, &subset) == 0,
+                      what + ": FreeType reads the subset");
+            std::vector<FT_UInt> order{0};
+            for (const char32_t c: code_points(text)) {
+                const auto glyph = FT_Get_Char_Index(original, c);
+                if (std::ranges::find(order, glyph) == order.end()) order.push_back(glyph);
+            }
+            CHECK_EQ(static_cast<std::size_t>(subset->num_glyphs), order.size());
+            int mismatched = 0;
+            for (std::size_t g = 0; g < order.size(); ++g) {
+                FT_Load_Glyph(original, order[g], FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING);
+                FT_BBox a;
+                FT_Outline_Get_CBox(&original->glyph->outline, &a);
+                const auto advance = original->glyph->metrics.horiAdvance;
+                FT_Load_Glyph(subset, static_cast<FT_UInt>(g), FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING);
+                FT_BBox b;
+                FT_Outline_Get_CBox(&subset->glyph->outline, &b);
+                // The control box: a CFF glyph's cubic controls aren't kept, so its box may shrink a little.
+                const bool same = subset->glyph->metrics.horiAdvance == advance && std::abs(a.yMax - b.yMax) <= 40 && std::abs(a.xMin - b.xMin) <= 40;
+                if (!same) ++mismatched;
+            }
+            CHECK_MSG(mismatched == 0, what + ": " + std::to_string(mismatched) + " glyphs differ");
+            FT_Done_Face(subset);
+            FT_Done_Face(original);
+            FT_Done_FreeType(library);
+        };
+
+        if (const auto face = sc::font{"sans-serif", 12}.face()) {
+            check("installed", face->file(), face->index(), "Hello, caf\u00e9 \u20ac \u0416!");
+            const font embedded{sc::font{"sans-serif", 12}};
+            CHECK(embedded.covers("Hello"));
+            CHECK(!embedded.covers("\U0010FFFD"));                                // a private-use code point: no glyph
+            CHECK_EQ(embedded.encode("HH").size(), std::size_t{4});               // two bytes a glyph
+            CHECK_EQ(embedded.encode("H"), embedded.encode("H"));                 // the same glyph, the same number
+            CHECK(embedded.width("HH", 10) > embedded.width("H", 10));
+            CHECK(embedded.ascender(10) > 0 && embedded.descender(10) > 0 && embedded.cap_height(10) > 0);
+            CHECK_THROWS_AS(embedded.encode("\xC3"), std::invalid_argument);
+        } else std::cout << "no font from fontconfig: the installed-font test skipped\n";
+        CHECK_THROWS_AS(font::load(output() / "no-such.ttf"), std::runtime_error);
+
+        const fs::path variable = SC_PDFLITE_TEST_VARIABLE_FONT;
+        if (fs::exists(variable)) {
+            // Its named instances: the bold one's glyphs are bold, as the subset shows.
+            FT_Library library;
+            FT_Init_FreeType(&library);
+            FT_Face probe;
+            FT_New_Face(library, variable.string().c_str(), 0, &probe);
+            const auto instances = probe->style_flags >> 16;
+            FT_Done_Face(probe);
+            long bold = -1, regular = -1;
+            for (long i = 1; i <= instances; ++i) {
+                FT_Face named;
+                FT_New_Face(library, variable.string().c_str(), i << 16, &named);
+                const std::string style = named->style_name ? named->style_name : "";
+                if (style == "Bold") bold = i << 16;
+                if (style == "Regular") regular = i << 16;
+                FT_Done_Face(named);
+            }
+            FT_Done_FreeType(library);
+            CHECK(bold > 0 && regular > 0);
+            if (bold > 0 && regular > 0) {
+                CHECK(font::load(variable, bold).width("Hamburg", 10) > font::load(variable, regular).width("Hamburg", 10));
+                check("variable-bold", variable, bold, "Hamburg Bold");
+            }
+        } else std::cout << "no variable font (" << variable << "): its test skipped\n";
+
+        const fs::path cff = SC_PDFLITE_TEST_CFF_FONT;
+        if (fs::exists(cff)) check("cff", cff, 0, "Curves: S, O, g & @ 8");
+        else std::cout << "no CFF font (" << cff << "): its test skipped\n";
     }
 
     SECTION("Links and bookmarks");

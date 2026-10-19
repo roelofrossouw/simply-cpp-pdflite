@@ -54,7 +54,7 @@ namespace sc::pdflite {
                 return states.try_emplace({fill, stroke}, "GS" + std::to_string(states.size() + 1)).first->second;
             }
 
-            std::string image(const sc::bitmap &bitmap) {
+            std::string picture(const sc::bitmap &bitmap) {
                 const std::string *key = &bitmap.bytes();
                 if (const auto found = images.find(key); found != images.end()) return found->second.second;
                 std::shared_ptr<const pdflite::image> picture;
@@ -124,7 +124,7 @@ namespace sc::pdflite {
             } else if (const auto *figure = std::get_if<sc::figure>(&item)) {
                 page.save();
                 clip_to(page, figure->clip);
-                page.draw(used.image(figure->bitmap), figure->placement);
+                page.draw(used.picture(figure->bitmap), figure->placement);
                 page.restore();
             }
         }
