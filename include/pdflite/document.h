@@ -2,6 +2,7 @@
 #define SC_PDFLITE_DOCUMENT_H
 
 #include "content.h"
+#include "encryption.h"
 #include "file.h"
 #include "font.h"
 #include "image.h"
@@ -118,6 +119,11 @@ namespace sc::pdflite {
         // in and start closed. The page is checked by close(), like a link's.
         void bookmark(std::string_view title, std::size_t page, sc::distance top = 0, int level = 0);
 
+        // Encrypts the file (AES-256, pdflite/encryption.h) with these passwords and permissions, as
+        // close() writes it; any time before close(). Throws std::invalid_argument without a
+        // password.
+        void protect(const protection &settings);
+
         // Finishes the file. Throws std::logic_error when a page's content isn't complete (an open
         // q, text object or path), std::runtime_error when writing failed; nothing can be added
         // afterwards. Calling it again does nothing.
@@ -178,6 +184,7 @@ namespace sc::pdflite {
         std::map<const void *, written_font> embedded_; // by the font's identity
         std::map<std::string, pdflite::string> info_;
         std::vector<outline_item> outline_;
+        std::shared_ptr<const encryption> encryption_;
     };
 }
 

@@ -15,15 +15,17 @@ find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 
 # Streams are compressed with zlib; embedded fonts are read by FreeType (as sc-graphics reads them).
 find_package(ZLIB REQUIRED)
 config_or_install_package(freetype2 libfreetype-dev freetype)
+# Encryption (AES-256, SHA-2, random keys) by OpenSSL's libcrypto: cryptography isn't ours to write.
+find_or_install_package(OpenSSL libssl-dev openssl)
 
 set(SOURCE_OBJECTS)
 set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
 add_sc_object(pdflite
-        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/jpeg.cpp src/png.cpp src/svg.cpp src/font.cpp
-        LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB PkgConfig::freetype2
-        PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB)
+        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/jpeg.cpp src/png.cpp src/svg.cpp src/font.cpp src/encryption.cpp
+        LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB PkgConfig::freetype2 OpenSSL::Crypto
+        PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB OpenSSL::Crypto)
 
 add_sc_libraries(DESCRIPTION "simply-cpp-pdflite")
 
@@ -43,6 +45,7 @@ add_sc_example(sc-pdflite-pages)
 add_sc_example(sc-pdflite-png)
 add_sc_example(sc-pdflite-svg)
 add_sc_example(sc-pdflite-fonts)
+add_sc_example(sc-pdflite-passwords)
 # The PNG and SVG demos' pictures are installed with them, and found in the source when they run
 # from a build.
 install(FILES examples/resource/badge.png examples/resource/badge-interlaced.png examples/resource/stamp.png
@@ -67,4 +70,4 @@ if (sc-image_FOUND AND SC_BUILD_EXAMPLES)
 endif ()
 
 package_sc_module(
-        DEV_DEPENDS "simply-cpp-dev (>= 1.17.0~)" "simply-cpp-graphics-dev (>= 6.2.0~)" zlib1g-dev libfreetype-dev)
+        DEV_DEPENDS "simply-cpp-dev (>= 1.17.0~)" "simply-cpp-graphics-dev (>= 6.2.0~)" zlib1g-dev libfreetype-dev libssl-dev)

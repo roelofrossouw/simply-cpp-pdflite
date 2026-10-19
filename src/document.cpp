@@ -207,6 +207,11 @@ namespace sc::pdflite {
         return root;
     }
 
+    void document::protect(const protection &settings) {
+        check_open();
+        encryption_ = std::make_shared<const encryption>(settings);
+    }
+
     void document::close() {
         if (file_.finished()) return;
         // Everything is checked before anything is written, so a mistake leaves nothing half-done.
@@ -220,6 +225,13 @@ namespace sc::pdflite {
         for (const auto &item: outline_)
             if (item.page > pages_.size()) throw std::out_of_range("sc::pdflite: a bookmark to page " + std::to_string(item.page) + ", which isn't there");
 
+        // Encryption first: everything written after it is encrypted, but its own dictionary.
+        std::uint32_t encrypt = 0;
+        if (encryption_) {
+            encrypt = file_.allocate();
+            file_.encrypt(encryption_, encrypt);
+            file_.write(encrypt, encryption_->dictionary());
+        }
         array kids;
         for (auto &page: pages_) {
             const std::uint32_t contents = file_.allocate();
@@ -269,6 +281,9 @@ namespace sc::pdflite {
         const std::uint32_t outlines = write_outline();
         const std::uint32_t catalog = file_.allocate();
         dictionary root{{"Type", name{"Catalog"}}, {"Pages", reference{pages_id_}}};
+        // AES-256 (revision 6) in a PDF 1.7 file: Adobe's extension level 8, as Acrobat writes it.
+        if (encryption_)
+            root.add("Extensions", dictionary{{"ADBE", dictionary{{"BaseVersion", name{"1.7"}}, {"ExtensionLevel", 8}}}});
         if (outlines) root.add("Outlines", reference{outlines}).add("PageMode", name{"UseOutlines"});
         file_.write(catalog, root);
 
@@ -280,6 +295,6 @@ namespace sc::pdflite {
         const std::uint32_t information_id = file_.allocate();
         file_.write(information_id, information);
 
-        file_.finish(catalog, information_id);
+        file_.finish(catalog, information_id, encrypt);
     }
 }

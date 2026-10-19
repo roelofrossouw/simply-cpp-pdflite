@@ -1,10 +1,12 @@
 #ifndef SC_PDFLITE_FILE_H
 #define SC_PDFLITE_FILE_H
 
+#include "encryption.h"
 #include "object.h"
 
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -34,15 +36,26 @@ namespace sc::pdflite {
         // /DCTDecode, is written with compress false).
         void write_stream(std::uint32_t id, dictionary entries, std::string_view data, bool compress = true);
 
-        // Writes the cross-reference table and the trailer, naming the catalog (root) and the
-        // information dictionary (info, 0: none), and closes the file. Throws std::logic_error when an allocated object wasn't written, and
+        // From now on, encrypts every string and stream written (7.6), but object exempt's: the
+        // /Encrypt dictionary, which is read before anything can be decrypted.
+        void encrypt(std::shared_ptr<const encryption> with, std::uint32_t exempt);
+
+        // Writes the cross-reference table and the trailer, naming the catalog (root), the
+        // information dictionary (info, 0: none) and the encryption dictionary (encrypt, 0: none),
+        // and closes the file. Throws std::logic_error when an allocated object wasn't written, and
         // std::runtime_error when writing failed.
-        void finish(std::uint32_t root, std::uint32_t info);
+        void finish(std::uint32_t root, std::uint32_t info, std::uint32_t encrypt = 0);
 
         [[nodiscard]] bool finished() const { return finished_; }
 
     private:
         void put(std::string_view bytes);
+
+        // value with its strings encrypted, when they're to be (object id).
+        [[nodiscard]] pdflite::object sealed(const pdflite::object &value, std::uint32_t id) const;
+
+        std::shared_ptr<const encryption> encryption_;
+        std::uint32_t exempt_ = 0;
 
         // Starts object id: checks it may be written and notes where it begins.
         void start(std::uint32_t id);
