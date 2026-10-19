@@ -8,17 +8,23 @@
 // sc-pdflite's content streams (ISO 32000-1, 8 and 9): a page's drawing, operator by operator.
 namespace sc::pdflite {
 
-    // A page's content stream, built operator by operator (ISO 32000-1, 8 and 9), in PDF's own
-    // coordinates: points, y up from the bottom of the page. It keeps PDF's rules, throwing
+    // A page's content stream, built operator by operator (ISO 32000-1, 8 and 9). Positions are
+    // sc-graphics' canvas's: points from the page's top-left corner, y down; they're written in
+    // PDF's own (y up from the bottom), so it needs the page's height. It keeps PDF's rules, throwing
     // std::logic_error when an operator would break them: graphics states (q/Q) balance, text only
     // inside BT/ET, a path painted or ended before anything else, Tf before text is shown, and no
     // q/Q, path or nested BT inside a text object. text() holds what's been written so far.
     class content {
     public:
+        // For a page this many points high.
+        explicit content(double page_height);
+
         // Graphics state.
         void save();                  // q
         void restore();               // Q
-        void transform(double a, double b, double c, double d, double e, double f); // cm
+        // cm: x' = a x + c y + e, y' = b x + d y + f, in these coordinates (y down); written as the
+        // same mapping in PDF's.
+        void transform(double a, double b, double c, double d, double e, double f);
         void line_width(double width);                                             // w
         void fill_colour(double red, double green, double blue);                   // rg, 0 to 1
         void stroke_colour(double red, double green, double blue);                 // RG, 0 to 1
@@ -29,7 +35,7 @@ namespace sc::pdflite {
         void line(double x, double y);                                             // l
         void curve(double x1, double y1, double x2, double y2, double x3, double y3); // c
         void close_path();                                                         // h
-        void rectangle(double x, double y, double width, double height);           // re
+        void rectangle(double left, double top, double width, double height);      // re
 
         // Painting a path (and ending it), or making it the clip.
         void fill(bool even_odd = false);              // f, f*
@@ -42,7 +48,8 @@ namespace sc::pdflite {
         void begin_text(); // BT
         void end_text();   // ET
         void font(std::string_view resource, double size); // Tf, a resource name such as "F1"
-        void text_position(double x, double y);            // Td
+        // Tm: the baseline starts at (x, y), wherever the text before it ended.
+        void text_position(double x, double y);
         // Tj: bytes in the font's encoding (for the built-in fonts, WinAnsiEncoding).
         void show(std::string_view bytes);
 
@@ -57,6 +64,9 @@ namespace sc::pdflite {
         void path_step(std::string_view what);
         void paint(std::string_view line);
 
+        [[nodiscard]] double y(double down) const { return height_ - down; } // PDF's y
+
+        double height_;
         std::string text_;
         std::vector<bool> saved_;  // each open q: whether a font was set when it saved the state
         bool in_text_ = false;

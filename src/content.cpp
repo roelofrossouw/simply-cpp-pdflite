@@ -14,6 +14,10 @@ namespace sc::pdflite {
         }
     }
 
+    content::content(const double page_height) : height_(page_height) {
+        number(page_height); // throws when it isn't finite
+    }
+
     void content::op(const std::string_view line) {
         text_.append(line);
         text_ += '\n';
@@ -40,7 +44,9 @@ namespace sc::pdflite {
 
     void content::transform(const double a, const double b, const double c, const double d, const double e, const double f) {
         outside_text("cm");
-        op(number(a) + " " + number(b) + " " + number(c) + " " + number(d) + " " + number(e) + " " + number(f) + " cm");
+        // The flip y -> h - y on both sides of the mapping: [a -b -c d (c h + e) (h - d h - f)].
+        op(number(a) + " " + number(-b) + " " + number(-c) + " " + number(d) + " " + number(c * height_ + e) + " " +
+           number(height_ - d * height_ - f) + " cm");
     }
 
     void content::line_width(const double width) {
@@ -71,20 +77,20 @@ namespace sc::pdflite {
 
     void content::move(const double x, const double y) {
         path_step("m");
-        op(number(x) + " " + number(y) + " m");
+        op(number(x) + " " + number(this->y(y)) + " m");
         in_path_ = true;
     }
 
     void content::line(const double x, const double y) {
         path_step("l");
         if (!in_path_) throw std::logic_error("sc::pdflite: l without a current point (m first)");
-        op(number(x) + " " + number(y) + " l");
+        op(number(x) + " " + number(this->y(y)) + " l");
     }
 
     void content::curve(const double x1, const double y1, const double x2, const double y2, const double x3, const double y3) {
         path_step("c");
         if (!in_path_) throw std::logic_error("sc::pdflite: c without a current point (m first)");
-        op(number(x1) + " " + number(y1) + " " + number(x2) + " " + number(y2) + " " + number(x3) + " " + number(y3) + " c");
+        op(number(x1) + " " + number(y(y1)) + " " + number(x2) + " " + number(y(y2)) + " " + number(x3) + " " + number(y(y3)) + " c");
     }
 
     void content::close_path() {
@@ -93,9 +99,9 @@ namespace sc::pdflite {
         op("h");
     }
 
-    void content::rectangle(const double x, const double y, const double width, const double height) {
+    void content::rectangle(const double left, const double top, const double width, const double height) {
         path_step("re");
-        op(number(x) + " " + number(y) + " " + number(width) + " " + number(height) + " re");
+        op(number(left) + " " + number(y(top + height)) + " " + number(width) + " " + number(height) + " re"); // from its bottom-left corner
         in_path_ = true;
     }
 
@@ -140,8 +146,8 @@ namespace sc::pdflite {
     }
 
     void content::text_position(const double x, const double y) {
-        if (!in_text_) throw std::logic_error("sc::pdflite: Td outside a text object (BT first)");
-        op(number(x) + " " + number(y) + " Td");
+        if (!in_text_) throw std::logic_error("sc::pdflite: Tm outside a text object (BT first)");
+        op("1 0 0 1 " + number(x) + " " + number(this->y(y)) + " Tm");
     }
 
     void content::show(const std::string_view bytes) {

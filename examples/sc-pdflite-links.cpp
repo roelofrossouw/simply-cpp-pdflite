@@ -14,9 +14,10 @@
 #include <standard_font.h>
 
 namespace {
-    // A line of text in a built-in font at (x, y), and the area it covers, for a link.
-    sc::pdflite::area write_line(sc::pdflite::document &pdf, const std::string &font, const double size,
-                                 const double x, const double y, const std::string &text) {
+    // A line of text in a built-in font, its baseline starting at (x, y), and the area it covers,
+    // for a link.
+    sc::rect write_line(sc::pdflite::document &pdf, const std::string &font, const double size,
+                        const double x, const double y, const std::string &text) {
         auto &page = pdf.page_content();
         page.begin_text();
         page.font(pdf.standard_font(font), size);
@@ -25,7 +26,7 @@ namespace {
         page.end_text();
         const auto metrics = sc::standard_font::of(sc::font{font.starts_with("Times") ? "Times" : "Helvetica", size,
                                                             font.ends_with("Bold") ? 700 : 400});
-        return {x, y - metrics->descender(size), x + metrics->width(text, size), y + metrics->ascender(size)};
+        return {x, y - metrics->ascender(size), metrics->width(text, size), metrics->ascender(size) + metrics->descender(size)};
     }
 }
 
@@ -45,7 +46,7 @@ int main(int argc, char **argv) {
 
         // [readme]
         sc::pdflite::document pdf{output, sc::page_size::A4};
-        const double top = pdf.height() - 72;                  // an inch from the top
+        const double top = 72; // the headings' baselines, an inch from the top
         const std::vector<std::string> chapters{"Getting started", "Drawing", "Text and fonts"};
 
         sc::console::heading("Pages first: a link may go to a page that comes later, but it must be there by close()");
@@ -56,30 +57,30 @@ int main(int argc, char **argv) {
         pdf.set_page(1);
         write_line(pdf, "Helvetica-Bold", 24, 72, top, "Contents");
         for (std::size_t i = 0; i < chapters.size(); ++i) {
-            const auto line = write_line(pdf, "Times-Roman", 14, 90, top - 50 - 24.0 * i, std::to_string(i + 1) + ". " + chapters[i]);
-            SC_STEP(pdf.link(line, i + 2, top + 20)); // the chapter's page, from just above its heading
+            const auto line = write_line(pdf, "Times-Roman", 14, 90, top + 50 + 24.0 * i, std::to_string(i + 1) + ". " + chapters[i]);
+            SC_STEP(pdf.link(line, i + 2, top - 20)); // the chapter's page, from just above its heading
         }
 
         sc::console::heading("A web link (link(area, url)): the address is written in ASCII, percent-encoded");
-        const auto site = write_line(pdf, "Helvetica", 11, 72, 100, "simply-cpp on GitHub");
+        const auto site = write_line(pdf, "Helvetica", 11, 72, pdf.height() - 100, "simply-cpp on GitHub");
         SC_STEP(pdf.link(site, "https://github.com/roelofrossouw/simply-cpp"));
 
         sc::console::heading("Chapters, each with a way back to the contents");
         for (std::size_t i = 0; i < chapters.size(); ++i) {
             pdf.set_page(i + 2);
             write_line(pdf, "Helvetica-Bold", 20, 72, top, std::to_string(i + 1) + ". " + chapters[i]);
-            write_line(pdf, "Times-Roman", 12, 72, top - 40, "Section " + std::to_string(i + 1) + ".1");
-            write_line(pdf, "Times-Roman", 12, 72, top - 300, "Section " + std::to_string(i + 1) + ".2");
-            const auto back = write_line(pdf, "Helvetica", 10, 72, 60, "Back to the contents");
-            pdf.link(back, 1, top + 20);
+            write_line(pdf, "Times-Roman", 12, 72, top + 40, "Section " + std::to_string(i + 1) + ".1");
+            write_line(pdf, "Times-Roman", 12, 72, top + 300, "Section " + std::to_string(i + 1) + ".2");
+            const auto back = write_line(pdf, "Helvetica", 10, 72, pdf.height() - 60, "Back to the contents");
+            pdf.link(back, 1); // the top of the contents page
         }
 
         sc::console::heading("Bookmarks: level 0 for chapters, 1 for their sections");
-        SC_STEP(pdf.bookmark("Contents", 1, top + 20));
+        SC_STEP(pdf.bookmark("Contents", 1)); // the top of page 1
         for (std::size_t i = 0; i < chapters.size(); ++i) {
-            SC_STEP(pdf.bookmark(chapters[i], i + 2, top + 20));
-            pdf.bookmark("Section " + std::to_string(i + 1) + ".1", i + 2, top - 25, 1);
-            pdf.bookmark("Section " + std::to_string(i + 1) + ".2", i + 2, top - 285, 1);
+            SC_STEP(pdf.bookmark(chapters[i], i + 2, top - 20));
+            pdf.bookmark("Section " + std::to_string(i + 1) + ".1", i + 2, top + 25, 1);
+            pdf.bookmark("Section " + std::to_string(i + 1) + ".2", i + 2, top + 285, 1);
         }
         pdf.info("Title", "sc-pdflite: links and bookmarks");
         SC_STEP(pdf.close());

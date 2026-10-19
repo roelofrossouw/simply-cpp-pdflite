@@ -8,7 +8,8 @@
 //   pdflite/file.h      the file: header, objects, cross-reference table, trailer
 //   pdflite/content.h   a page's content stream, which refuses what PDF forbids
 //   pdflite/document.h  pages, fonts and the document's information
-// Coordinates are PDF's own: points, y up from the bottom of the page.
+// Positions are sc-graphics' canvas's: points from the page's top-left corner, y down (PDF's
+// own, y up from the bottom, are what gets written).
 #include "pdflite/object.h"
 #include "pdflite/file.h"
 #include "pdflite/content.h"
