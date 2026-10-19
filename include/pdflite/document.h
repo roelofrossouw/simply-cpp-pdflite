@@ -92,6 +92,13 @@ namespace sc::pdflite {
         // once.
         std::string image(const pdflite::image &picture);
 
+        // The resource name ("GS1") of a graphics state (8.4.5, an ExtGState) that paints fills and
+        // text at fill_alpha and strokes at stroke_alpha (0 transparent to 1 opaque), in the current
+        // page's resources, adding it there (and to the file, once) the first time; set it with
+        // content::state(), inside q ... Q so it doesn't stay. Throws std::invalid_argument for an
+        // alpha outside 0 to 1.
+        std::string graphics_state(double fill_alpha, double stroke_alpha = 1);
+
         // UTF-8 text in WinAnsiEncoding, the built-in fonts' bytes; nullopt when a character isn't
         // in it. Throws std::invalid_argument on malformed UTF-8.
         [[nodiscard]] static std::optional<std::string> win_ansi(std::string_view utf8);
@@ -139,6 +146,7 @@ namespace sc::pdflite {
             std::map<sc::standard_font::face, std::string> fonts; // each font: its resource name here
             std::map<const void *, std::string> images;           // each picture (by its identity): its name here
             std::map<const void *, std::string> embedded;         // each embedded font (by its identity): its name here
+            std::map<std::pair<double, double>, std::string> states; // each graphics state (fill, stroke alpha): its name here
             struct link {
                 array rect;                         // [left bottom right top], in PDF's coordinates
                 std::optional<pdflite::string> uri; // a URI action's, or else a page and a top
@@ -182,6 +190,7 @@ namespace sc::pdflite {
             std::uint32_t id;
         };
         std::map<const void *, written_font> embedded_; // by the font's identity
+        std::map<std::pair<double, double>, std::uint32_t> states_; // each graphics state: its object
         std::map<std::string, pdflite::string> info_;
         std::vector<outline_item> outline_;
         std::shared_ptr<const encryption> encryption_;

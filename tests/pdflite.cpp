@@ -271,6 +271,16 @@ int main() {
         third.text_position(72, 72); // the baseline an inch from the top
         third.show("Page three");
         third.end_text();
+        const auto half = pdf.graphics_state(0.5, 0.25); // fills at half, strokes at a quarter
+        CHECK_EQ(half, "GS1");
+        CHECK_EQ(pdf.graphics_state(0.5, 0.25), "GS1"); // the same one again
+        CHECK_EQ(pdf.graphics_state(0.75), "GS2");
+        CHECK_THROWS_AS(pdf.graphics_state(1.5), std::invalid_argument);
+        third.save();
+        third.state(half);
+        third.rectangle(72, 100, 50, 50);
+        third.fill();
+        third.restore();
         CHECK_THROWS_AS(pdf.set_page(4), std::out_of_range);
         CHECK_THROWS_AS(pdf.set_page(0), std::out_of_range);
         CHECK_THROWS_AS(pdf.info("ModDate", "x"), std::invalid_argument);
@@ -292,6 +302,10 @@ int main() {
         CHECK(contains(streams, "2 0 0 2 0 -792 cm"));  // the top-left corner stays where it is
         CHECK(contains(streams, "1 0 0 1 72 720 Tm"));
         CHECK(contains(streams, "(Page three) Tj"));
+        CHECK(contains(streams, "q\n/GS1 gs\n"));
+        CHECK(contains(file, "/ExtGState << /GS1 6 0 R /GS2 7 0 R >>"));
+        CHECK(contains(file, "<< /Type /ExtGState /ca 0.5 /CA 0.25 >>"));
+        CHECK(contains(file, "<< /Type /ExtGState /ca 0.75 /CA 1 >>"));
     }
 
     SECTION("Distances: millimetres and inches, written as points");
@@ -644,6 +658,8 @@ int main() {
             CHECK_EQ(embedded.encode("H"), embedded.encode("H"));                 // the same glyph, the same number
             CHECK(embedded.width("HH", 10) > embedded.width("H", 10));
             CHECK(embedded.ascender(10) > 0 && embedded.descender(10) > 0 && embedded.cap_height(10) > 0);
+            CHECK(embedded.x_height(10) > 0 && embedded.x_height(10) < embedded.cap_height(10));
+            CHECK(embedded.cap_height(10) < embedded.ascender(10));
             CHECK_THROWS_AS(embedded.encode("\xC3"), std::invalid_argument);
         } else std::cout << "no font from fontconfig: the installed-font test skipped\n";
         CHECK_THROWS_AS(font::load(output() / "no-such.ttf"), std::runtime_error);

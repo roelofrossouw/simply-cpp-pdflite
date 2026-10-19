@@ -5,9 +5,10 @@ include("${CMAKE_CURRENT_LIST_DIR}/SimplyCppFunctions.cmake")
 find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.17.0)
 # pdflite.h's built-in fonts come from sc-graphics' sc::standard_font.
 find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 6.2.0)
-# The static library links zlib and OpenSSL's libcrypto.
+# The static library links zlib, FreeType and OpenSSL's libcrypto.
 include(CMakeFindDependencyMacro)
 find_dependency(ZLIB)
+config_or_install_package(freetype2 libfreetype-dev freetype)
 find_or_install_package(OpenSSL libssl-dev openssl)
 
 include("${CMAKE_CURRENT_LIST_DIR}/sc-pdfliteTargets.cmake")

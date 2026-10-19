@@ -6,6 +6,7 @@
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include FT_ADVANCES_H
 #include FT_OUTLINE_H
 #include FT_TRUETYPE_TABLES_H
 
@@ -17,6 +18,7 @@
 #include <map>
 #include <mutex>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 namespace sc::pdflite {
@@ -29,6 +31,8 @@ namespace sc::pdflite {
         std::mutex lock;
         std::vector<std::pair<FT_UInt, char32_t>> glyphs{{0, 0}};
         std::map<FT_UInt, std::uint16_t> renumbered{{0, 0}};
+        // Each character's advance, in font units, once looked up: text is measured often.
+        std::unordered_map<char32_t, FT_Fixed> advances;
 
         ~data() {
             if (face) FT_Done_Face(face);
@@ -208,6 +212,21 @@ namespace sc::pdflite {
             return out;
         }
 
+        // How far a letter rises above the baseline, in font units (0 when the font hasn't it).
+        double letter_height(const FT_Face face, const char letter) {
+            if (FT_Load_Char(face, static_cast<FT_ULong>(letter), FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0) return 0;
+            return static_cast<double>(face->glyph->metrics.horiBearingY);
+        }
+
+        // The cap height, in font units: OS/2's, or else (DejaVu, for one, doesn't give it) the
+        // height of an H, or else 70% of the ascender.
+        double capital_height(const FT_Face face) {
+            const auto *os2 = static_cast<const TT_OS2 *>(FT_Get_Sfnt_Table(face, FT_SFNT_OS2));
+            if (os2 && os2->version >= 2 && os2->sCapHeight > 0) return os2->sCapHeight;
+            if (const double h = letter_height(face, 'H'); h > 0) return h;
+            return face->ascender * 0.7;
+        }
+
         double units(const FT_Face face, const double value) { return value * 1000 / face->units_per_EM; } // to PDF's thousandths
     }
 
@@ -251,8 +270,13 @@ namespace sc::pdflite {
         std::lock_guard guard{data_->lock};
         double advance = 0;
         for (const char32_t code: code_points(utf8)) {
-            if (FT_Load_Glyph(data_->face, FT_Get_Char_Index(data_->face, code), FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) == 0)
-                advance += static_cast<double>(data_->face->glyph->metrics.horiAdvance);
+            auto found = data_->advances.find(code);
+            if (found == data_->advances.end()) {
+                FT_Fixed units = 0;
+                if (FT_Get_Advance(data_->face, FT_Get_Char_Index(data_->face, code), FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP, &units) != 0) units = 0;
+                found = data_->advances.emplace(code, units).first;
+            }
+            advance += static_cast<double>(found->second);
         }
         return advance * size.points() / data_->face->units_per_EM;
     }
@@ -262,8 +286,14 @@ namespace sc::pdflite {
     sc::distance font::descender(const sc::distance size) const { return -data_->face->descender * size.points() / data_->face->units_per_EM; }
 
     sc::distance font::cap_height(const sc::distance size) const {
+        std::lock_guard guard{data_->lock};
+        return capital_height(data_->face) * size.points() / data_->face->units_per_EM;
+    }
+
+    sc::distance font::x_height(const sc::distance size) const {
+        std::lock_guard guard{data_->lock};
         const auto *os2 = static_cast<const TT_OS2 *>(FT_Get_Sfnt_Table(data_->face, FT_SFNT_OS2));
-        const double height = os2 && os2->version >= 2 && os2->sCapHeight > 0 ? os2->sCapHeight : data_->face->ascender * 0.7;
+        const double height = os2 && os2->version >= 2 && os2->sxHeight > 0 ? os2->sxHeight : letter_height(data_->face, 'x');
         return height * size.points() / data_->face->units_per_EM;
     }
 
@@ -397,7 +427,7 @@ namespace sc::pdflite {
         cmap += "endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n";
 
         const auto *os2 = static_cast<const TT_OS2 *>(FT_Get_Sfnt_Table(face, FT_SFNT_OS2));
-        const double cap = os2 && os2->version >= 2 && os2->sCapHeight > 0 ? os2->sCapHeight : face->ascender * 0.7;
+        const double cap = capital_height(face);
         const double weight = os2 ? os2->usWeightClass : 400;
 
         const std::uint32_t descendant = out.allocate(), descriptor = out.allocate(), program_id = out.allocate(), unicode = out.allocate();
