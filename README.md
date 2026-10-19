@@ -10,7 +10,9 @@ What it writes so far:
 - **The file:** a PDF 1.7 header, objects written as they're finished, a cross-reference table
   of exact 20-byte entries, and a trailer with the file's identifier.
 - **Pages** of one size, each with a content stream compressed with zlib; an earlier page can be
-  drawn on again until the document is closed.
+  drawn on again until the document is closed. The size is one of sc-graphics' paper sizes
+  (`sc::page_size::A4`, A3, A5, Letter, Legal, and `sc::orientation`, as sc-pdf and sc-mupdf
+  take them) or any width and height in points.
 - **Content:** paths (lines, curves, rectangles), RGB fill and stroke colours, line width,
   transforms, clipping (nonzero and even-odd), graphics states and text. The content stream
   refuses what PDF forbids, throwing `std::logic_error`: an unbalanced `q`/`Q`, a path inside a
@@ -32,23 +34,27 @@ Values are checked as they're written: a number that isn't finite, a page side r
 Coordinates are PDF's own: points (1/72 inch), y up from the bottom of the page.
 
 Each part has its own header (and source), to work on and include alone: `pdflite/object.h`
-(how values are written), `pdflite/file.h` (the file: objects, the cross-reference table,
+(PDF's values: `name`, `string`, `reference`, `array`, `dictionary`, and `object` holding any of
+them, each writing itself and checked as it's made), `pdflite/file.h` (the file: objects, the cross-reference table,
 the trailer), `pdflite/content.h` (a page's content stream) and `pdflite/document.h` (pages,
 fonts, information). `pdflite.h` includes them all.
 
 **Documentation:** the [simply-cpp wiki](https://github.com/roelofrossouw/simply-cpp/wiki) has a [PDF guide](https://github.com/roelofrossouw/simply-cpp/wiki/PDF), plus [getting started](https://github.com/roelofrossouw/simply-cpp/wiki/Getting-Started) for the whole suite.
 
-## Demo
+## Demos
 
+Each feature gets a demo of its own as it's added, so they read as a short course.
 `sc-pdflite-demo` writes two pages: centred text in the built-in fonts, shapes and a clipped
 drawing. It's installed with the runtime package (`simply-cpp-pdflite`). Its code, copied from
 `examples/sc-pdflite-demo.cpp` at configure time:
 
 <!-- sc-example: examples/sc-pdflite-demo.cpp -->
 ```cpp
-sc::console::heading("A document of A4 pages (595.28 x 841.89 points)");
-sc::pdflite::document pdf{output, 595.2756, 841.8898};
-sc::console::step("sc::pdflite::document pdf{output, 595.2756, 841.8898};   // " + output.string());
+sc::console::heading("A document of A4 pages: sc-graphics' paper sizes, or any size in points");
+sc::pdflite::document pdf{output, sc::page_size::A4};
+sc::console::step("sc::pdflite::document pdf{output, sc::page_size::A4};   // " + output.string());
+SC_SHOW(pdf.width());  // points, 1/72 inch
+SC_SHOW(pdf.height());
 
 sc::console::heading("Text: a built-in font, then BT ... ET");
 auto &page = pdf.page_content();
@@ -114,6 +120,57 @@ second.end_text();
 SC_STEP(pdf.info("Title", "sc-pdflite demo"));
 SC_STEP(pdf.close());
 SC_SHOW(std::filesystem::file_size(output));
+```
+<!-- /sc-example -->
+
+## Links and bookmarks
+
+`sc-pdflite-links` writes a booklet: a contents page whose lines go to the chapters, a way back
+on each chapter, a web link, and bookmarks for the reader's outline. Its code, copied from
+`examples/sc-pdflite-links.cpp` at configure time:
+
+<!-- sc-example: examples/sc-pdflite-links.cpp -->
+```cpp
+sc::pdflite::document pdf{output, sc::page_size::A4};
+const double top = pdf.height() - 72;                  // an inch from the top
+const std::vector<std::string> chapters{"Getting started", "Drawing", "Text and fonts"};
+
+sc::console::heading("Pages first: a link may go to a page that comes later, but it must be there by close()");
+for (std::size_t i = 0; i < chapters.size(); ++i) pdf.add_page(); // pages 2 to 4
+SC_SHOW(pdf.page_count());
+
+sc::console::heading("The contents page: each line a link to its chapter (link(area, page, top))");
+pdf.set_page(1);
+write_line(pdf, "Helvetica-Bold", 24, 72, top, "Contents");
+for (std::size_t i = 0; i < chapters.size(); ++i) {
+    const auto line = write_line(pdf, "Times-Roman", 14, 90, top - 50 - 24.0 * i, std::to_string(i + 1) + ". " + chapters[i]);
+    SC_STEP(pdf.link(line, i + 2, top + 20)); // the chapter's page, from just above its heading
+}
+
+sc::console::heading("A web link (link(area, url)): the address is written in ASCII, percent-encoded");
+const auto site = write_line(pdf, "Helvetica", 11, 72, 100, "simply-cpp on GitHub");
+SC_STEP(pdf.link(site, "https://github.com/roelofrossouw/simply-cpp"));
+
+sc::console::heading("Chapters, each with a way back to the contents");
+for (std::size_t i = 0; i < chapters.size(); ++i) {
+    pdf.set_page(i + 2);
+    write_line(pdf, "Helvetica-Bold", 20, 72, top, std::to_string(i + 1) + ". " + chapters[i]);
+    write_line(pdf, "Times-Roman", 12, 72, top - 40, "Section " + std::to_string(i + 1) + ".1");
+    write_line(pdf, "Times-Roman", 12, 72, top - 300, "Section " + std::to_string(i + 1) + ".2");
+    const auto back = write_line(pdf, "Helvetica", 10, 72, 60, "Back to the contents");
+    pdf.link(back, 1, top + 20);
+}
+
+sc::console::heading("Bookmarks: level 0 for chapters, 1 for their sections");
+SC_STEP(pdf.bookmark("Contents", 1, top + 20));
+for (std::size_t i = 0; i < chapters.size(); ++i) {
+    SC_STEP(pdf.bookmark(chapters[i], i + 2, top + 20));
+    pdf.bookmark("Section " + std::to_string(i + 1) + ".1", i + 2, top - 25, 1);
+    pdf.bookmark("Section " + std::to_string(i + 1) + ".2", i + 2, top - 285, 1);
+}
+pdf.info("Title", "sc-pdflite: links and bookmarks");
+SC_STEP(pdf.close());
+SC_SHOW(std::filesystem::file_size(output)); // bytes
 ```
 <!-- /sc-example -->
 

@@ -88,24 +88,56 @@ int main() {
     CHECK_EQ(number(12.345678), std::string{"12.3457"});
     CHECK_EQ(number(-1.5), std::string{"-1.5"});
     CHECK_EQ(number(842), std::string{"842"});
-    CHECK_EQ(number(1e10), std::string{"10000000000.0"}); // beyond 32 bits: a real
+    CHECK_EQ(number(1e10), std::string{"10000000000.0"}); // beyond 32 bits: written as a real
     CHECK_THROWS_AS(number(std::numeric_limits<double>::quiet_NaN()), std::invalid_argument);
     CHECK_THROWS_AS(number(1e39), std::invalid_argument);
 
     SECTION("Names, strings and text strings");
-    CHECK_EQ(name("Helvetica-Bold"), std::string{"/Helvetica-Bold"});
-    CHECK_EQ(name("A B/C#"), std::string{"/A#20B#2FC#23"});
+    CHECK_EQ(name("Helvetica-Bold").write(), std::string{"/Helvetica-Bold"});
+    CHECK_EQ(name("A B/C#").write(), std::string{"/A#20B#2FC#23"});
     CHECK_THROWS_AS(name(""), std::invalid_argument);
-    CHECK_EQ(literal("a(b)\\"), std::string{"(a\\(b\\)\\\\)"});
-    CHECK_EQ(literal("x\n\x80"), std::string{"(x\\012\\200)"});
-    CHECK_EQ(hex("\x01\xAB"), std::string{"<01AB>"});
-    CHECK_EQ(text_string("Plain title"), std::string{"(Plain title)"});
-    CHECK_EQ(text_string("Caf\xC3\xA9"), std::string{"<FEFF00430061006600E9>"});
-    CHECK_EQ(text_string("\xF0\x9F\x98\x80"), std::string{"<FEFFD83DDE00>"}); // 😀: a surrogate pair
-    CHECK_THROWS_AS(text_string("\xC3"), std::invalid_argument);
+    CHECK_THROWS_AS(name(std::string_view{"a\0b", 3}), std::invalid_argument);
+    CHECK_EQ(string("a(b)\\").write(), std::string{"(a\\(b\\)\\\\)"});
+    CHECK_EQ(string("x\n\x80").write(), std::string{"(x\\012\\200)"});
+    CHECK_EQ(string("\x01\xAB", true).write(), std::string{"<01AB>"});
+    CHECK_EQ(string::text("Plain title").write(), std::string{"(Plain title)"});
+    CHECK_EQ(string::text("Caf\xC3\xA9").write(), std::string{"<FEFF00430061006600E9>"});
+    CHECK_EQ(string::text("\xF0\x9F\x98\x80").write(), std::string{"<FEFFD83DDE00>"}); // 😀: a surrogate pair
+    CHECK_THROWS_AS(string::text("\xC3"), std::invalid_argument);
     {
-        const auto stamp = date(std::chrono::system_clock::now());
+        const auto stamp = string::date(std::chrono::system_clock::now()).write();
         CHECK(std::regex_match(stamp, std::regex{R"(\(D:\d{14}(Z|[+-]\d\d'\d\d')\))"}));
+    }
+
+    SECTION("Objects: every kind writes itself, and is checked as it's made");
+    CHECK_EQ(object{}.write(), std::string{"null"});
+    CHECK_EQ(object{true}.write(), std::string{"true"});
+    CHECK_EQ(object{-42}.write(), std::string{"-42"});
+    CHECK_EQ(object{std::size_t{7}}.write(), std::string{"7"});
+    CHECK_EQ(object{2.5}.write(), std::string{"2.5"});
+    CHECK_EQ(object{reference{12}}.write(), std::string{"12 0 R"});
+    CHECK_THROWS_AS(object{reference{0}}.write(), std::invalid_argument);
+    CHECK_THROWS_AS(object{5'000'000'000LL}, std::invalid_argument); // beyond 32 bits
+    CHECK_THROWS_AS(object{std::numeric_limits<double>::infinity()}, std::invalid_argument);
+    CHECK_EQ(array{}.write(), std::string{"[]"});
+    CHECK_EQ(dictionary{}.write(), std::string{"<< >>"});
+    {
+        const dictionary page{{"Type", name{"Page"}}, {"MediaBox", array{0, 0, 612, 792}}, {"Rotate", 0},
+                              {"Info", dictionary{{"Title", string::text("A")}, {"Nothing", nullptr}}}};
+        CHECK_EQ(page.write(), std::string{"<< /Type /Page /MediaBox [0 0 612 792] /Rotate 0 /Info << /Title (A) /Nothing null >> >>"});
+        CHECK_EQ(page.size(), std::size_t{4});
+        CHECK(page.at("Type").is<name>());
+        CHECK_EQ(page.at("Type").as<name>().text(), std::string{"Page"});
+        CHECK_EQ(page.at("MediaBox").as<array>().size(), std::size_t{4});
+        CHECK(page.find("Missing") == nullptr);
+        CHECK_THROWS_AS(page.at("Missing"), std::out_of_range);
+        CHECK_THROWS_AS((dictionary{{"Type", name{"A"}}, {"Type", name{"B"}}}), std::logic_error); // a key twice
+        dictionary changed = page;
+        changed.set("Rotate", 90).set("Extra", false);
+        CHECK_EQ(changed.at("Rotate").as<std::int64_t>(), std::int64_t{90});
+        CHECK_EQ(changed.size(), std::size_t{5});
+        CHECK_THROWS_AS(changed.add("Extra", true), std::logic_error);
+        CHECK_THROWS_AS(changed.add("", true), std::invalid_argument); // a key is a name
     }
 
     SECTION("WinAnsiEncoding for the built-in fonts");
@@ -153,7 +185,7 @@ int main() {
     SECTION("Every built-in font, on one page");
     const auto fonts_file = output() / "fonts.pdf";
     {
-        document pdf{fonts_file, 595.2756, 841.8898}; // A4
+        document pdf{fonts_file, 595.2756, 841.8898}; // any size in points: A4 to the hundredth of a millimetre
         auto &page = pdf.page_content();
         double y = 800;
         for (const char *font: {"Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
@@ -182,7 +214,7 @@ int main() {
         CHECK(contains(file, "/BaseFont /Times-BoldItalic /Encoding /WinAnsiEncoding"));
         CHECK(contains(file, "/Title <FEFF"));
         CHECK(contains(file, "/Author (simply-cpp)"));
-        CHECK(contains(file, "/Producer (simply-cpp-pdf)"));
+        CHECK(contains(file, "/Producer (simply-cpp-pdflite)"));
         CHECK(contains(file, "/CreationDate (D:"));
         const auto streams = inflated_streams(file);
         CHECK(contains(streams, "/F1 14 Tf"));
@@ -192,7 +224,7 @@ int main() {
     SECTION("Pages, drawing on an earlier one again, shapes and clipping");
     const auto pages_file = output() / "pages.pdf";
     {
-        document pdf{pages_file, 612, 792}; // Letter
+        document pdf{pages_file, sc::page_size::letter}; // 612 x 792 points
         pdf.add_page();
         pdf.add_page();
         CHECK_EQ(pdf.page_count(), std::size_t{3});
@@ -302,6 +334,13 @@ int main() {
 
     SECTION("Mistakes");
     {
+        {
+            document landscape{fs::temp_directory_path() / "sc-pdflite-landscape.pdf", sc::page_size::A5, sc::orientation::landscape};
+            CHECK_EQ(landscape.width(), 595.0); // sc-graphics' A5, turned: 595 x 420 points
+            CHECK_EQ(landscape.height(), 420.0);
+            landscape.close();
+            fs::remove(fs::temp_directory_path() / "sc-pdflite-landscape.pdf");
+        }
         CHECK_THROWS_AS(document(output() / "too-small.pdf", 2, 100), std::invalid_argument);
         CHECK(!fs::exists(output() / "too-small.pdf")); // checked before the file is made
         const auto unfinished = fs::temp_directory_path() / "sc-pdflite-unfinished.pdf"; // not for the checkers

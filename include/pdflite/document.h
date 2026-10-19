@@ -3,6 +3,9 @@
 
 #include "content.h"
 #include "file.h"
+#include "object.h"
+
+#include <page.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -30,6 +33,11 @@ namespace sc::pdflite {
         // In points. Throws std::invalid_argument for a size readers can't show (ISO 32000-1 annex
         // C: 3 to 14,400 points), std::runtime_error when the file can't be created.
         document(const std::filesystem::path &path, double width, double height);
+
+        // A standard paper size (sc-graphics' page.h, shared with sc-pdf and sc-mupdf), portrait
+        // or turned to landscape.
+        explicit document(const std::filesystem::path &path, sc::page_size paper = sc::page_size::A4,
+                          sc::orientation turned = sc::orientation::portrait);
 
         // Closes the file if close() wasn't called, reporting a failure on std::cerr.
         ~document();
@@ -102,23 +110,23 @@ namespace sc::pdflite {
             pdflite::content content;
             std::map<std::string, std::string> fonts; // base font: its resource name here
             struct link {
-                std::string rect;   // [left bottom right top]
-                std::string uri;    // a URI action's string, or empty for a page
-                std::size_t page;   // else: the page and top it goes to
+                array rect;                         // [left bottom right top]
+                std::optional<pdflite::string> uri; // a URI action's, or else a page and a top
+                std::size_t page;
                 double top;
             };
             std::vector<link> links;
         };
 
         struct outline_item {
-            std::string title; // as a text string
+            pdflite::string title;
             std::size_t page;
             double top;
             int level;
         };
 
         // [page /XYZ 0 top null]
-        [[nodiscard]] std::string destination(std::size_t page, double top) const;
+        [[nodiscard]] array destination(std::size_t page, double top) const;
 
         // Writes the outline's objects; returns the root's number (0 without bookmarks).
         std::uint32_t write_outline();
@@ -131,7 +139,7 @@ namespace sc::pdflite {
         std::vector<page_state> pages_;
         std::size_t current_ = 0;
         std::map<std::string, std::uint32_t> fonts_; // base font: its object
-        std::map<std::string, std::string> info_;    // key: text string, as written
+        std::map<std::string, pdflite::string> info_;
         std::vector<outline_item> outline_;
     };
 }
