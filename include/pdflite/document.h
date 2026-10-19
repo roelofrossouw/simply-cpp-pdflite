@@ -11,6 +11,7 @@
 #include <distance.h>
 #include <page.h>
 #include <rect.h>
+#include <size.h>
 #include <standard_font.h>
 
 #include <cstdint>
@@ -32,10 +33,10 @@ namespace sc::pdflite {
     // information dictionary. It starts with one page, the current one.
     class document {
     public:
-        // Any sc::distance (sc::dist::mm, sc::dist::inch, or points). Throws std::invalid_argument for a size
+        // A size of distances ({sc::dist::mm(210), sc::dist::mm(297)}, or points). Throws std::invalid_argument for a size
         // readers can't show (ISO 32000-1 annex C: 3 to 14,400 points), std::runtime_error when the
         // file can't be created.
-        document(const std::filesystem::path &path, sc::distance width, sc::distance height);
+        document(const std::filesystem::path &path, const sc::size_<sc::distance> &size);
 
         // A standard paper size (sc-graphics' page.h, shared with sc-pdf and sc-mupdf), portrait
         // or turned to landscape.
@@ -54,7 +55,7 @@ namespace sc::pdflite {
         // std::invalid_argument for a size readers can't show, as the constructor does.
         void add_page();
 
-        void add_page(sc::distance width, sc::distance height);
+        void add_page(const sc::size_<sc::distance> &size);
 
         void add_page(sc::page_size paper, sc::orientation turned = sc::orientation::portrait);
 
@@ -65,11 +66,9 @@ namespace sc::pdflite {
 
         [[nodiscard]] std::size_t page_count() const { return pages_.size(); }
 
-        // The current page's size, in points: << writes "595.276pt"; static_cast<sc::dist::mm>(width())
-        // is the same in millimetres.
-        [[nodiscard]] sc::distance width() const { return pages_[current_].width; }
-
-        [[nodiscard]] sc::distance height() const { return pages_[current_].height; }
+        // The current page's size: << writes [595.276pt,841.89pt], and
+        // static_cast<sc::size_<sc::dist::mm>>(size()) is [210mm,297mm].
+        [[nodiscard]] sc::size_<sc::distance> size() const { return {pages_[current_].width, pages_[current_].height}; }
 
         // The current page's content.
         content &page_content();

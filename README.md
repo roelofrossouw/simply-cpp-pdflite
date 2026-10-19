@@ -69,9 +69,8 @@ drawing. It's installed with the runtime package (`simply-cpp-pdflite`). Its cod
 sc::console::heading("A document of A4 pages: sc-graphics' paper sizes, or any size in points");
 sc::pdflite::document pdf{output, sc::page_size::A4};
 sc::console::step("sc::pdflite::document pdf{output, sc::page_size::A4};   // " + output.string());
-SC_SHOW(pdf.width());  // a distance, in points (1/72 inch)
-SC_SHOW(pdf.height());
-SC_SHOW(static_cast<sc::dist::mm>(pdf.width())); // the same, in millimetres
+SC_SHOW(pdf.size());                                       // distances, in points (1/72 inch)
+SC_SHOW(static_cast<sc::size_<sc::dist::mm>>(pdf.size())); // the same, in millimetres
 
 sc::console::heading("Text: a built-in font, then BT ... ET");
 auto &page = pdf.page_content();
@@ -83,7 +82,7 @@ const sc::distance width = metrics.width(heading, 28);
 SC_SHOW(width); // Adobe's widths: lines are measured as readers draw them
 page.begin_text();
 page.font(bold, 28);
-page.text_position((pdf.width() - width) / 2, 82); // centred, the baseline 82 points from the top
+page.text_position((pdf.size().width() - width) / 2, 82); // centred, the baseline 82 points from the top
 page.show(*sc::pdflite::document::win_ansi(heading));
 page.end_text();
 
@@ -165,7 +164,7 @@ for (std::size_t i = 0; i < chapters.size(); ++i) {
 }
 
 sc::console::heading("A web link (link(area, url)): the address is written in ASCII, percent-encoded");
-const auto site = write_line(pdf, sc::standard_font::face::helvetica, 11, 72, pdf.height() - 100, "simply-cpp on GitHub");
+const auto site = write_line(pdf, sc::standard_font::face::helvetica, 11, 72, pdf.size().height() - 100, "simply-cpp on GitHub");
 SC_STEP(pdf.link(site, "https://github.com/roelofrossouw/simply-cpp"));
 
 sc::console::heading("Chapters, each with a way back to the contents");
@@ -174,7 +173,7 @@ for (std::size_t i = 0; i < chapters.size(); ++i) {
     write_line(pdf, sc::standard_font::face::helvetica_bold, 20, 72, top, std::to_string(i + 1) + ". " + chapters[i]);
     write_line(pdf, sc::standard_font::face::times_roman, 12, 72, top + 40, "Section " + std::to_string(i + 1) + ".1");
     write_line(pdf, sc::standard_font::face::times_roman, 12, 72, top + 300, "Section " + std::to_string(i + 1) + ".2");
-    const auto back = write_line(pdf, sc::standard_font::face::helvetica, 10, 72, pdf.height() - 60, "Back to the contents");
+    const auto back = write_line(pdf, sc::standard_font::face::helvetica, 10, 72, pdf.size().height() - 60, "Back to the contents");
     pdf.link(back, 1); // the top of the contents page
 }
 
@@ -202,14 +201,12 @@ the middle, and a link from the first to the second. Its code, copied from
 ```cpp
 sc::console::heading("Page 1: the document's size, A4 portrait");
 sc::pdflite::document pdf{output, sc::page_size::A4};
-SC_SHOW(static_cast<sc::dist::mm>(pdf.width()));  // the current page's size
-SC_SHOW(static_cast<sc::dist::mm>(pdf.height()));
+SC_SHOW(static_cast<sc::size_<sc::dist::mm>>(pdf.size())); // the current page's size, in mm
 frame_and_size(pdf, "A4 portrait");
 
 sc::console::heading("Page 2: a size of its own, A3 landscape (add_page(paper, orientation))");
 SC_STEP(pdf.add_page(sc::page_size::A3, sc::orientation::landscape));
-SC_SHOW(static_cast<sc::dist::mm>(pdf.width()));  // now page 2's
-SC_SHOW(static_cast<sc::dist::mm>(pdf.height()));
+SC_SHOW(static_cast<sc::size_<sc::dist::mm>>(pdf.size())); // now page 2's
 frame_and_size(pdf, "A3 landscape");
 
 sc::console::heading("Links and bookmarks find each page's own size");

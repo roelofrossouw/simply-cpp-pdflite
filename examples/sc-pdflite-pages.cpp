@@ -22,17 +22,18 @@ namespace {
         page.save();
         page.stroke_colour(0.16, 0.44, 0.59);
         page.line_width(sc::dist::mm(0.5));
-        page.rectangle(margin, margin, pdf.width() - 2 * margin, pdf.height() - 2 * margin);
+        page.rectangle(margin, margin, pdf.size().width() - 2 * margin, pdf.size().height() - 2 * margin);
         page.stroke();
         page.restore();
 
         std::ostringstream size;
-        size << paper << ": " << static_cast<sc::dist::mm>(pdf.width()) << " x " << static_cast<sc::dist::mm>(pdf.height());
+        const auto in_mm = static_cast<sc::size_<sc::dist::mm>>(pdf.size());
+        size << paper << ": " << in_mm.width() << " x " << in_mm.height();
         const sc::standard_font font{sc::standard_font::face::helvetica_bold};
         const double text_size = 28;
         page.begin_text();
         page.font(pdf.standard_font(font.which()), text_size);
-        page.text_position((pdf.width() - font.width(size.str(), text_size)) / 2, pdf.height() / 2); // centred
+        page.text_position((pdf.size().width() - font.width(size.str(), text_size)) / 2, pdf.size().height() / 2); // centred
         page.show(*sc::pdflite::document::win_ansi(size.str()));
         page.end_text();
     }
@@ -55,14 +56,12 @@ int main(int argc, char **argv) {
         // [readme]
         sc::console::heading("Page 1: the document's size, A4 portrait");
         sc::pdflite::document pdf{output, sc::page_size::A4};
-        SC_SHOW(static_cast<sc::dist::mm>(pdf.width()));  // the current page's size
-        SC_SHOW(static_cast<sc::dist::mm>(pdf.height()));
+        SC_SHOW(static_cast<sc::size_<sc::dist::mm>>(pdf.size())); // the current page's size, in mm
         frame_and_size(pdf, "A4 portrait");
 
         sc::console::heading("Page 2: a size of its own, A3 landscape (add_page(paper, orientation))");
         SC_STEP(pdf.add_page(sc::page_size::A3, sc::orientation::landscape));
-        SC_SHOW(static_cast<sc::dist::mm>(pdf.width()));  // now page 2's
-        SC_SHOW(static_cast<sc::dist::mm>(pdf.height()));
+        SC_SHOW(static_cast<sc::size_<sc::dist::mm>>(pdf.size())); // now page 2's
         frame_and_size(pdf, "A3 landscape");
 
         sc::console::heading("Links and bookmarks find each page's own size");
