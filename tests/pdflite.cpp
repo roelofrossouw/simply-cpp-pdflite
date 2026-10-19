@@ -15,6 +15,8 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <map>
+#include <array>
 #include <regex>
 #include <stdexcept>
 #include <string>
@@ -418,6 +420,95 @@ int main() {
         const auto streams = inflated_streams(file);
         CHECK(contains(streams, "q\n300 0 0 200 100 541.8898 cm\n/Im1 Do\nQ")); // 841.8898 - 100 - 200
         CHECK(contains(streams, "-300 0 0 200 400 241.8898 cm"));                 // mirrored about x = 250: 841.8898 - 200 - 400
+    }
+
+    SECTION("PNG: copied as it is when it can be, else decoded, with transparency as a soft mask");
+    const auto pngs_file = output() / "pngs.pdf";
+    {
+        // The pattern tests/resource/png/make-pngs.py drew them with.
+        const auto rgb = [](const int x, const int y) { return std::array<int, 3>{x * 30 % 256, y * 50 % 256, (x + y) * 10 % 256}; };
+        const auto alpha = [](const int x, const int y) { return (x * y * 13 + 40) % 256; };
+        const auto grey = [](const int x, const int y, const int depth) { return (x + 2 * y) % (1 << depth); };
+        const auto palette = [](const int i) { return std::array<int, 3>{i * 36 % 256, i * 18 % 256, 255 - i * 30}; };
+        const auto bytes_of = [](const auto &pixel) {
+            std::string out;
+            for (int y = 0; y < 5; ++y)
+                for (int x = 0; x < 7; ++x)
+                    for (const int v: pixel(x, y)) out += static_cast<char>(v);
+            return out;
+        };
+        const fs::path folder = SC_PDFLITE_TEST_PNGS;
+        document pdf{pngs_file, sc::page_size::A4};
+        double y = 20;
+        std::map<std::string, png> pictures;
+        for (const char *name: {"rgb8", "rgb16", "grey1", "grey4", "palette4", "rgba8", "grey-alpha16", "palette-alpha", "grey-key",
+                                "rgb-interlaced", "rgba-interlaced"}) {
+            const auto picture = png::load(folder / (std::string{name} + ".png"));
+            CHECK_EQ(picture.width(), 7.0);
+            CHECK_EQ(picture.height(), 5.0);
+            pdf.page_content().draw(pdf.image(picture), sc::rect{20, y, 70, 50});
+            pictures.emplace(name, picture);
+            y += 60;
+        }
+        CHECK(pictures.at("rgb8").copied());
+        CHECK(pictures.at("rgb16").copied());
+        CHECK(pictures.at("palette4").copied());
+        CHECK(!pictures.at("rgba8").copied());          // an alpha channel
+        CHECK(!pictures.at("grey-key").copied());       // a key colour
+        CHECK(!pictures.at("rgb-interlaced").copied()); // interlaced
+        CHECK(pictures.at("rgb-interlaced").interlaced());
+        CHECK_EQ(pictures.at("grey-alpha16").bit_depth(), 16);
+        CHECK_EQ(pictures.at("palette-alpha").colour_type(), 3);
+        pdf.close();
+
+        const auto file = read(pngs_file);
+        CHECK(structure_problem(file).empty());
+        CHECK(contains(file, "/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 3 /BitsPerComponent 8 /Columns 7 >>"));
+        CHECK(contains(file, "/BitsPerComponent 16 /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 3 /BitsPerComponent 16 /Columns 7 >>"));
+        CHECK(contains(file, "/ColorSpace /DeviceGray /BitsPerComponent 1 /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 1 /BitsPerComponent 1 /Columns 7 >>"));
+        CHECK(contains(file, "/ColorSpace [/Indexed /DeviceRGB 7 <"));
+        CHECK(contains(file, "/SMask "));
+        const auto streams = inflated_streams(file);
+        const auto expect = [&](const std::string &what, const std::string &bytes) { CHECK_MSG(contains(streams, bytes), what); };
+        expect("rgba8 colours", bytes_of(rgb));
+        expect("rgba8 alpha", bytes_of([&](const int x, const int y) { return std::array<int, 1>{alpha(x, y)}; }));
+        expect("grey-alpha16: grey at 8 bits", bytes_of([&](const int x, const int y) { return std::array<int, 1>{grey(x, y, 8)}; }));
+        expect("palette-alpha: the palette's colours",
+               bytes_of([&](const int x, const int y) { return palette((x + y) % 8); }));
+        expect("palette-alpha: its alphas, opaque past tRNS", bytes_of([&](const int x, const int y) {
+            const int index = (x + y) % 8;
+            return std::array<int, 1>{index < 4 ? std::array<int, 4>{0, 64, 128, 255}[index] : 255};
+        }));
+        expect("grey-key: grey 4 bits scaled to 8", bytes_of([&](const int x, const int y) { return std::array<int, 1>{grey(x, y, 4) * 17}; }));
+        expect("grey-key: the key colour see-through",
+               bytes_of([&](const int x, const int y) { return std::array<int, 1>{grey(x, y, 4) == 3 ? 0 : 255}; }));
+    }
+    {
+        // Mistakes: each refused when the PNG is made.
+        const auto good = read(fs::path{SC_PDFLITE_TEST_PNGS} / "rgb8.png");
+        const auto chunk = [](const std::string &type, const std::string &body) {
+            std::string out;
+            for (const int shift: {24, 16, 8, 0}) out += static_cast<char>(body.size() >> shift & 0xFF);
+            out += type + body;
+            const auto crc = crc32(crc32(0, nullptr, 0), reinterpret_cast<const Bytef *>(out.data() + 4), static_cast<uInt>(type.size() + body.size()));
+            for (const int shift: {24, 16, 8, 0}) out += static_cast<char>(crc >> shift & 0xFF);
+            return out;
+        };
+        const auto idat = good.find("IDAT") - 4; // where the image data's chunk starts
+        CHECK_THROWS_AS(png{"not a PNG"}, std::invalid_argument);
+        std::string broken = good;
+        broken[20] ^= 1; // inside IHDR: its CRC fails
+        CHECK_THROWS_AS(png{broken}, std::invalid_argument);
+        CHECK_THROWS_AS(png{good.substr(0, good.size() - 6)}, std::invalid_argument); // cut short
+        CHECK_THROWS_AS(png{good.substr(0, idat) + chunk("QXYZ", "") + good.substr(idat)}, std::invalid_argument); // unknown critical
+        CHECK_NOTHROW(png{good.substr(0, idat) + chunk("abCd", "ignored") + good.substr(idat)});              // unknown ancillary
+        CHECK_NOTHROW(png{good.substr(0, idat) + chunk("PLTE", std::string(6, '\0')) + good.substr(idat)}); // RGB may suggest a palette
+        const auto grey_png = read(fs::path{SC_PDFLITE_TEST_PNGS} / "grey4.png");
+        const auto grey_idat = grey_png.find("IDAT") - 4;
+        CHECK_THROWS_AS(png{grey_png.substr(0, grey_idat) + chunk("PLTE", std::string(6, '\0')) + grey_png.substr(grey_idat)}, std::invalid_argument); // grey can't
+        const auto iend = good.find("IEND") - 4;
+        CHECK_THROWS_AS(png{good.substr(0, iend) + chunk("tRNS", std::string(6, '\0')) + good.substr(iend)}, std::invalid_argument); // after IDAT
+        CHECK_THROWS_AS(png::load(output() / "no-such.png"), std::runtime_error);
     }
 
     SECTION("Links and bookmarks");
