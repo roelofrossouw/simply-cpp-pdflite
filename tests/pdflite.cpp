@@ -5,6 +5,7 @@
 
 #include "sc_test.h"
 
+#include <base64.h>
 #include <console.h>
 
 #include <zlib.h>
@@ -85,9 +86,11 @@ namespace {
 }
 
 int main() {
-    SECTION("Numbers: integers when whole, four decimals at most, no exponent");
+    SECTION("Numbers: integers when whole, four decimals (six significant digits below 1), no exponent");
     CHECK_EQ(number(0), std::string{"0"});
-    CHECK_EQ(number(-0.00001), std::string{"0"}); // never -0
+    CHECK_EQ(number(-0.00000000001), std::string{"0"}); // never -0
+    CHECK_EQ(number(1 / 595.2756), std::string{"0.00167989"}); // six significant digits below 1
+    CHECK_EQ(number(0.5), std::string{"0.5"});
     CHECK_EQ(number(595.2756), std::string{"595.2756"});
     CHECK_EQ(number(12.345678), std::string{"12.3457"});
     CHECK_EQ(number(-1.5), std::string{"-1.5"});
@@ -509,6 +512,53 @@ int main() {
         const auto iend = good.find("IEND") - 4;
         CHECK_THROWS_AS(png{good.substr(0, iend) + chunk("tRNS", std::string(6, '\0')) + good.substr(iend)}, std::invalid_argument); // after IDAT
         CHECK_THROWS_AS(png::load(output() / "no-such.png"), std::runtime_error);
+    }
+
+    SECTION("SVG: a form of vectors, placed like a picture");
+    const auto svg_file = output() / "svg.pdf";
+    {
+        const auto picture = sc::base64::encode(read(fs::path{SC_PDFLITE_TEST_PNGS} / "rgba8.png"));
+        const std::string text = R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100">
+            <rect x="5" y="5" width="190" height="90" rx="12" fill="#2a6f97" stroke="#000000" stroke-width="2"/>
+            <circle cx="50" cy="50" r="30" fill="#f4d35e" fill-opacity="0.5"/>
+            <path d="M100 20 h60 v60 h-60 Z M115 35 h30 v30 h-30 Z" fill="#ee6c4d" fill-rule="evenodd"/>
+            <clipPath id="c"><rect x="170" y="10" width="20" height="20"/></clipPath>
+            <circle cx="180" cy="20" r="15" fill="#ffffff" clip-path="url(#c)"/>
+            <text x="10" y="90" font-family="Arial" font-weight="bold" font-size="12" fill="#ffffff">Caf&#233; &#8364;5 &#1046;</text>
+            <text x="120" y="95" font-family="Unknown Sans" font-size="8" fill="#ffffff">fallback</text>
+            <image x="160" y="60" width="35" height="25" href="data:image/png;base64,)svg" + picture + R"svg("/>
+        </svg>)svg";
+        const auto drawing = svg::parse(text);
+        CHECK_EQ(drawing.width(), 200.0);
+        CHECK_EQ(drawing.height(), 100.0);
+        document pdf{svg_file, sc::page_size::A4};
+        const auto name = pdf.image(drawing);
+        CHECK_EQ(name, std::string{"Fm1"});
+        pdf.page_content().draw(name, sc::rect{50, 50, 400, 200});
+        pdf.page_content().draw(name, sc::transform{200, 0, 0, 100, 50, 300}.then(sc::transform::rotate(10, {150, 350})));
+        CHECK_EQ(pdf.image(svg{drawing}), std::string{"Fm1"}); // a copy: the same drawing
+        pdf.close();
+        CHECK_THROWS_AS(svg::parse("<svg xmlns=\"http://www.w3.org/2000/svg\"/>"), std::invalid_argument); // no size
+    }
+    {
+        const auto file = read(svg_file);
+        CHECK(structure_problem(file).empty());
+        std::size_t forms = 0;
+        for (auto at = file.find("/Subtype /Form"); at != std::string::npos; at = file.find("/Subtype /Form", at + 1)) ++forms;
+        CHECK_EQ(forms, std::size_t{1});                              // drawn twice, written once
+        CHECK(contains(file, "/BBox [0 0 200 100] /Matrix [0.005 0 0 0.01 0 0]"));
+        CHECK(contains(file, "/BaseFont /Helvetica-Bold"));            // Arial bold
+        CHECK(contains(file, "/BaseFont /Helvetica "));                // an unknown family: Helvetica
+        CHECK(contains(file, "/ExtGState << /GS1 << /Type /ExtGState /ca 0.5 /CA 1 >>"));
+        CHECK(contains(file, "/XObject << /Im1 "));                    // the PNG inside it
+        CHECK(contains(file, "/SMask "));                              // with its alpha
+        const auto streams = inflated_streams(file);
+        CHECK(contains(streams, "/GS1 gs"));
+        CHECK(contains(streams, "f*"));                               // the even-odd ring
+        CHECK(contains(streams, "W\nn"));                             // the clip
+        CHECK(contains(streams, "(Caf\\351 \\2005 ?) Tj"));          // \u00e9 and \u20ac in WinAnsi, \u0416 as '?'
+        CHECK(contains(streams, "/Fm1 Do"));
+        CHECK(contains(streams, "400 0 0 200 50 591.8898 cm"));         // the unit square into 400 x 200 at (50, 50)
     }
 
     SECTION("Links and bookmarks");
