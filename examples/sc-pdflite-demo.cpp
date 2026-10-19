@@ -31,8 +31,9 @@ int main(int argc, char **argv) {
         sc::console::heading("A document of A4 pages: sc-graphics' paper sizes, or any size in points");
         sc::pdflite::document pdf{output, sc::page_size::A4};
         sc::console::step("sc::pdflite::document pdf{output, sc::page_size::A4};   // " + output.string());
-        SC_SHOW(pdf.width());  // points, 1/72 inch
+        SC_SHOW(pdf.width());  // a distance, in points (1/72 inch)
         SC_SHOW(pdf.height());
+        SC_SHOW(static_cast<sc::dist::mm>(pdf.width())); // the same, in millimetres
 
         sc::console::heading("Text: a built-in font, then BT ... ET");
         auto &page = pdf.page_content();
@@ -40,7 +41,7 @@ int main(int argc, char **argv) {
         SC_SHOW(bold); // its name in the page's resources
         const std::string heading = "simply-cpp pdflite";
         const auto metrics = sc::standard_font::of(sc::font::bold("Helvetica", 28));
-        const double width = metrics->width(heading, 28);
+        const sc::distance width = metrics->width(heading, 28);
         SC_SHOW(width); // Adobe's widths: lines are measured as readers draw them
         page.begin_text();
         page.font(bold, 28);
