@@ -6,6 +6,7 @@ set(SC_TEST_LINK_LIBRARIES sc-pdflite)
 # server without it.
 set(pdflite_output "${CMAKE_CURRENT_BINARY_DIR}/pdflite-output")
 add_sc_test(pdflite LABELS unit LINK_LIBRARIES sc-pdflite ZLIB::ZLIB)
+target_compile_definitions(test-pdflite PRIVATE SC_PDFLITE_TEST_PHOTO="${CMAKE_CURRENT_SOURCE_DIR}/../examples/resource/cat.jpg")
 set_tests_properties(test-pdflite PROPERTIES
         ENVIRONMENT "SC_PDFLITE_OUTPUT=${pdflite_output}"
         FIXTURES_SETUP pdflite_files)

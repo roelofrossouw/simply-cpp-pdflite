@@ -52,8 +52,9 @@ namespace sc::pdflite {
     }
 
     void file::write_stream(const std::uint32_t id, dictionary entries, const std::string_view data, const bool compress) {
-        if (entries.contains("Length") || entries.contains("Filter"))
-            throw std::invalid_argument("sc::pdflite: a stream's /Length and /Filter are written for it");
+        if (entries.contains("Length")) throw std::invalid_argument("sc::pdflite: a stream's /Length is written for it");
+        if (compress && entries.contains("Filter"))
+            throw std::invalid_argument("sc::pdflite: a compressed stream's /Filter is written for it");
         const std::string packed = compress ? deflate(data) : std::string{data};
         entries.add("Length", packed.size());
         if (compress) entries.add("Filter", name{"FlateDecode"});

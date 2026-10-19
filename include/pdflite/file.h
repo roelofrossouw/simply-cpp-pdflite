@@ -27,9 +27,11 @@ namespace sc::pdflite {
         // is written once; throws std::logic_error otherwise.
         void write(std::uint32_t id, const pdflite::object &value);
 
-        // Writes object id as a stream (7.3.8): its dictionary (which gets /Length, and /Filter
-        // /FlateDecode when data is compressed with zlib, as it is unless compress is false; throws
-        // std::invalid_argument when it already has either), then data.
+        // Writes object id as a stream (7.3.8): its dictionary, which gets /Length, then data.
+        // Unless compress is false, data is compressed with zlib and the dictionary gets /Filter
+        // /FlateDecode. Throws std::invalid_argument when the dictionary has /Length already, or a
+        // /Filter of its own with compress (data that's encoded already, such as a JPEG with
+        // /DCTDecode, is written with compress false).
         void write_stream(std::uint32_t id, dictionary entries, std::string_view data, bool compress = true);
 
         // Writes the cross-reference table and the trailer, naming the catalog (root) and the
