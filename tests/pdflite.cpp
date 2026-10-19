@@ -246,6 +246,60 @@ int main() {
         CHECK(contains(streams, "(Page three) Tj"));
     }
 
+    SECTION("Links and bookmarks");
+    const auto links_file = output() / "links.pdf";
+    {
+        document pdf{links_file, 595.2756, 841.8898};
+        const auto font = pdf.standard_font("Helvetica");
+        auto &first = pdf.page_content();
+        first.begin_text();
+        first.font(font, 12);
+        first.text_position(72, 760);
+        first.show("A link to example.com, and one to page 2");
+        first.end_text();
+        pdf.link({72, 755, 300, 775}, "https://example.com/a b/caf\xC3\xA9?x=(1)"); // a space, UTF-8 and brackets
+        pdf.link({72, 730, 300, 750}, 2, 800); // a page that isn't there yet
+        CHECK_THROWS_AS(pdf.link({300, 0, 100, 10}, "https://example.com"), std::invalid_argument); // inverted
+        CHECK_THROWS_AS(pdf.link({0, 0, 10, 10}, ""), std::invalid_argument);
+        CHECK_THROWS_AS(pdf.link({0, 0, 10, 10}, 0, 0), std::out_of_range);
+        pdf.bookmark("Chapter 1", 1, 841);
+        pdf.bookmark("Section 1.1", 1, 700, 1);
+        pdf.bookmark("Detail 1.1.1", 1, 650, 2);
+        pdf.bookmark("Section 1.2 \xE2\x80\x93 caf\xC3\xA9", 2, 800, 1); // UTF-16
+        pdf.bookmark("Chapter 2", 2, 841);
+        pdf.bookmark("Deep jump", 2, 400, 5); // more than one deeper: under Chapter 2
+        pdf.add_page();
+        pdf.close();
+    }
+    {
+        const auto file = read(links_file);
+        const auto problem = structure_problem(file);
+        CHECK_MSG(problem.empty(), problem);
+        CHECK(contains(file, "/S /URI /URI (https://example.com/a%20b/caf%C3%A9?x=\\(1\\))"));
+        CHECK(contains(file, "/Subtype /Link /Rect [72 730 300 750] /F 4 /Border [0 0 0] /Dest ["));
+        CHECK(contains(file, " /XYZ 0 800 null]"));
+        CHECK(contains(file, "/Annots ["));
+        CHECK(contains(file, "/Type /Outlines /First "));
+        CHECK(contains(file, "/Count 2 >>"));           // two chapters at the top
+        CHECK(contains(file, "/Title (Chapter 1) /Parent "));
+        CHECK(contains(file, "/Count -2 /Dest"));       // Chapter 1, closed, two sections
+        CHECK(contains(file, "/PageMode /UseOutlines"));
+        CHECK(contains(file, "/Title <FEFF"));
+    }
+    {
+        // A link or bookmark to a page that never comes: close() refuses before writing anything.
+        const auto missing = fs::temp_directory_path() / "sc-pdflite-missing-page.pdf"; // not for the checkers
+        document pdf{missing, 200, 200};
+        pdf.link({0, 0, 10, 10}, 3, 0);
+        CHECK_THROWS_AS(pdf.close(), std::out_of_range);
+        CHECK(!pdf.closed());
+        pdf.add_page();
+        pdf.add_page();
+        pdf.bookmark("Nowhere", 9, 0);
+        CHECK_THROWS_AS(pdf.close(), std::out_of_range);
+    } // the destructor reports the same mistake on std::cerr
+    fs::remove(fs::temp_directory_path() / "sc-pdflite-missing-page.pdf");
+
     SECTION("Mistakes");
     {
         CHECK_THROWS_AS(document(output() / "too-small.pdf", 2, 100), std::invalid_argument);

@@ -3,16 +3,23 @@
 
 #include "content.h"
 #include "file.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <map>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 // sc-pdflite's document: pages, the built-in fonts they use, and the document's information.
 namespace sc::pdflite {
+
+    // An area of a page, in PDF's coordinates: points, y up from the bottom (a Rect, 7.9.5).
+    struct area {
+        double left, bottom, right, top;
+    };
 
     // A PDF document: pages of one size, each with a content stream, the built-in fonts they use,
     // and the document's information. The file is created at once and finished by close(): the
@@ -66,6 +73,22 @@ namespace sc::pdflite {
         // Throws std::invalid_argument for those three keys or an empty one.
         void info(std::string_view key, std::string_view value);
 
+        // Makes where (on the current page) a link to url (a URI action, 12.6.4.7). The URI is
+        // written in 7-bit ASCII: other bytes, spaces and control characters percent-encoded.
+        // Throws std::invalid_argument for an area that's inverted or not finite, or an empty url.
+        void link(const area &where, std::string_view url);
+
+        // Makes where (on the current page) a link to page (counting from 1), shown from top (a y
+        // in points, from the bottom) down (an /XYZ destination, 12.3.2.2). The page needn't exist
+        // yet; close() throws std::out_of_range when it doesn't by then.
+        void link(const area &where, std::size_t page, double top);
+
+        // A bookmark in the reader's outline (12.3.3), to page from top down: level 0 is the
+        // outermost, and each deeper level goes under the bookmark before it (a level more than
+        // one deeper than that one's counts as one deeper). Bookmarks keep the order they're added
+        // in and start closed. The page is checked by close(), like a link's.
+        void bookmark(std::string_view title, std::size_t page, double top, int level = 0);
+
         // Finishes the file. Throws std::logic_error when a page's content isn't complete (an open
         // q, text object or path), std::runtime_error when writing failed; nothing can be added
         // afterwards. Calling it again does nothing.
@@ -78,7 +101,27 @@ namespace sc::pdflite {
             std::uint32_t id;
             pdflite::content content;
             std::map<std::string, std::string> fonts; // base font: its resource name here
+            struct link {
+                std::string rect;   // [left bottom right top]
+                std::string uri;    // a URI action's string, or empty for a page
+                std::size_t page;   // else: the page and top it goes to
+                double top;
+            };
+            std::vector<link> links;
         };
+
+        struct outline_item {
+            std::string title; // as a text string
+            std::size_t page;
+            double top;
+            int level;
+        };
+
+        // [page /XYZ 0 top null]
+        [[nodiscard]] std::string destination(std::size_t page, double top) const;
+
+        // Writes the outline's objects; returns the root's number (0 without bookmarks).
+        std::uint32_t write_outline();
 
         void check_open() const;
 
@@ -89,6 +132,7 @@ namespace sc::pdflite {
         std::size_t current_ = 0;
         std::map<std::string, std::uint32_t> fonts_; // base font: its object
         std::map<std::string, std::string> info_;    // key: text string, as written
+        std::vector<outline_item> outline_;
     };
 }
 
