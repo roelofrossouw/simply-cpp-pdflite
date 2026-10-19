@@ -1,0 +1,1 @@
+C++20 PDF writer of our own: strict PDF 1.7, built-in fonts, no library but zlib
