@@ -54,9 +54,11 @@ namespace sc::pdflite {
 
         [[nodiscard]] std::size_t page_count() const { return pages_.size(); }
 
-        [[nodiscard]] double width() const { return width_; }
+        // The page's size, in points: << writes "595pt"; static_cast<sc::dist::mm>(width()) is the
+        // same in millimetres.
+        [[nodiscard]] sc::distance width() const { return width_; }
 
-        [[nodiscard]] double height() const { return height_; }
+        [[nodiscard]] sc::distance height() const { return height_; }
 
         // The current page's content.
         content &page_content();
