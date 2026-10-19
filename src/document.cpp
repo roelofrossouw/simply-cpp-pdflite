@@ -109,10 +109,10 @@ namespace sc::pdflite {
 
     std::string document::image(const pdflite::image &picture) {
         check_open();
-        const std::string *key = &picture.bytes();
+        const void *key = picture.identity();
         auto &page = pages_[current_];
         if (const auto found = page.images.find(key); found != page.images.end()) return found->second;
-        if (!images_.contains(key)) images_.emplace(key, written_image{picture, file_.allocate()});
+        if (!images_.contains(key)) images_.emplace(key, written_image{picture.clone(), file_.allocate()});
         const std::string resource = std::string{picture.prefix()} + std::to_string(page.images.size() + 1);
         page.images[key] = resource;
         return resource;
@@ -250,7 +250,7 @@ namespace sc::pdflite {
             file_.write(id, dictionary{{"Type", name{"Font"}}, {"Subtype", name{"Type1"}}, {"BaseFont", name{sc::standard_font::name(which)}},
                                        {"Encoding", name{"WinAnsiEncoding"}}});
 
-        for (const auto &[key, written]: images_) written.picture.write(file_, written.id);
+        for (const auto &[key, written]: images_) written.picture->write(file_, written.id);
 
         const std::uint32_t outlines = write_outline();
         const std::uint32_t catalog = file_.allocate();

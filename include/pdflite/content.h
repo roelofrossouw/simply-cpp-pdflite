@@ -57,15 +57,16 @@ namespace sc::pdflite {
         // Tj: bytes in the font's encoding (for the built-in fonts, WinAnsiEncoding).
         void show(std::string_view bytes);
 
-        // Images (Do, 8.9.5), a resource name such as "Im1": the image's unit square, its top-left
-        // corner at (0, 0) and its bottom-right at (1, 1), drawn through placement (in these
-        // coordinates, y down), so flips, turns and scales are sc::transform's. Inside q ... Q, so
-        // the placement doesn't stay. Not in a text object, nor while a path is open.
-        void image(std::string_view resource, const sc::transform &placement);
+        // A picture (Do, 8.8 and 8.10), a resource name such as "Im1" (document::image(): a JPEG,
+        // PNG or SVG): its unit square, top-left corner at (0, 0) and bottom-right at (1, 1), drawn
+        // through placement (in these coordinates, y down), so flips, turns and scales are
+        // sc::transform's. Inside q ... Q, so the placement doesn't stay. Not in a text object, nor
+        // while a path is open.
+        void draw(std::string_view resource, const sc::transform &placement);
 
-        // The same, filling where (stretched to it; keep the image's proportions for an undistorted
-        // picture).
-        void image(std::string_view resource, const sc::rect &where);
+        // The same, filling where (stretched to it; keep the picture's proportions for an
+        // undistorted one).
+        void draw(std::string_view resource, const sc::rect &where);
 
         [[nodiscard]] const std::string &text() const { return text_; }
 
