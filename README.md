@@ -10,7 +10,8 @@ What it writes so far:
 - **The file:** a PDF 1.7 header, objects written as they're finished, a cross-reference table
   of exact 20-byte entries, and a trailer with the file's identifier.
 - **Pages** of one size, each with a content stream compressed with zlib; an earlier page can be
-  drawn on again until the document is closed. The size is one of sc-graphics' paper sizes
+  drawn on again until the document is closed. Each page has its own size, the document's unless
+  `add_page()` gives one: one of sc-graphics' paper sizes
   (`sc::page_size::A4`, A3, A5, Letter, Legal, and `sc::orientation`, as sc-pdf and sc-mupdf
   take them) or any width and height in points.
 - **Content:** paths (lines, curves, rectangles), RGB fill and stroke colours, line width,
@@ -174,6 +175,45 @@ for (std::size_t i = 0; i < chapters.size(); ++i) {
     pdf.bookmark("Section " + std::to_string(i + 1) + ".2", i + 2, top + 285, 1);
 }
 pdf.info("Title", "sc-pdflite: links and bookmarks");
+SC_STEP(pdf.close());
+SC_SHOW(std::filesystem::file_size(output)); // bytes
+```
+<!-- /sc-example -->
+
+## Pages of different sizes
+
+`sc-pdflite-pages` writes an A4 portrait page and an A3 landscape one into one file
+(`add_page(paper, orientation)`, or any width and height), each framed with its size written in
+the middle, and a link from the first to the second. Its code, copied from
+`examples/sc-pdflite-pages.cpp` at configure time:
+
+<!-- sc-example: examples/sc-pdflite-pages.cpp -->
+```cpp
+sc::console::heading("Page 1: the document's size, A4 portrait");
+sc::pdflite::document pdf{output, sc::page_size::A4};
+SC_SHOW(static_cast<sc::dist::mm>(pdf.width()));  // the current page's size
+SC_SHOW(static_cast<sc::dist::mm>(pdf.height()));
+frame_and_size(pdf, "A4 portrait");
+
+sc::console::heading("Page 2: a size of its own, A3 landscape (add_page(paper, orientation))");
+SC_STEP(pdf.add_page(sc::page_size::A3, sc::orientation::landscape));
+SC_SHOW(static_cast<sc::dist::mm>(pdf.width()));  // now page 2's
+SC_SHOW(static_cast<sc::dist::mm>(pdf.height()));
+frame_and_size(pdf, "A3 landscape");
+
+sc::console::heading("Links and bookmarks find each page's own size");
+pdf.set_page(1);
+const auto font = pdf.standard_font(sc::standard_font::face::helvetica);
+auto &first = pdf.page_content();
+first.begin_text();
+first.font(font, 12);
+first.text_position(sc::dist::mm(25), sc::dist::mm(30));
+first.show("To the A3 page");
+first.end_text();
+SC_STEP(pdf.link(sc::rect{sc::dist::mm(25), sc::dist::mm(25), sc::dist::mm(32), sc::dist::mm(7)}, 2));
+SC_STEP(pdf.bookmark("A4 portrait", 1));
+SC_STEP(pdf.bookmark("A3 landscape", 2));
+pdf.info("Title", "sc-pdflite: pages of different sizes");
 SC_STEP(pdf.close());
 SC_SHOW(std::filesystem::file_size(output)); // bytes
 ```

@@ -13,10 +13,15 @@
 
 namespace sc::pdflite {
     namespace {
-        // The path, once the page size is one readers can show (checked before the file is made).
-        const std::filesystem::path &checked(const std::filesystem::path &path, const sc::distance width, const sc::distance height) {
+        // Throws std::invalid_argument for a page size readers can't show (annex C).
+        void check_size(const sc::distance width, const sc::distance height) {
             for (const double side: {width.points(), height.points()})
                 if (!(side >= 3 && side <= 14400)) throw std::invalid_argument("sc::pdflite: a page side outside 3 to 14,400 points");
+        }
+
+        // The path, once the page size is one readers can show (checked before the file is made).
+        const std::filesystem::path &checked(const std::filesystem::path &path, const sc::distance width, const sc::distance height) {
+            check_size(width, height);
             return path;
         }
     }
@@ -51,7 +56,8 @@ namespace sc::pdflite {
     array document::rect_of(const sc::rect &where) const {
         if (where.width() < 0 || where.height() < 0) throw std::invalid_argument("sc::pdflite: an area with a negative size");
         // PDF's Rect is [left bottom right top], y up; numbers that aren't finite throw here.
-        return {where.left(), height_ - where.bottom(), where.right(), height_ - where.top()};
+        const double height = pages_[current_].height;
+        return {where.left(), height - where.bottom(), where.right(), height - where.top()};
     }
 
     document::~document() {
@@ -66,10 +72,18 @@ namespace sc::pdflite {
         if (file_.finished()) throw std::logic_error("sc::pdflite: the document is closed");
     }
 
-    void document::add_page() {
+    void document::add_page() { add_page(width_, height_); }
+
+    void document::add_page(const sc::distance width, const sc::distance height) {
         check_open();
-        pages_.push_back({file_.allocate(), pdflite::content{height_}, {}, {}});
+        check_size(width, height);
+        pages_.push_back({file_.allocate(), width.points(), height.points(), pdflite::content{height}, {}, {}});
         current_ = pages_.size() - 1;
+    }
+
+    void document::add_page(const sc::page_size paper, const sc::orientation turned) {
+        const auto size = sc::page_dimensions(paper, turned);
+        add_page(size.width(), size.height());
     }
 
     void document::set_page(const std::size_t page) {
@@ -131,7 +145,7 @@ namespace sc::pdflite {
     }
 
     array document::destination(const std::size_t page, const double top) const {
-        return {reference{pages_[page - 1].id}, name{"XYZ"}, 0, height_ - top, nullptr};
+        return {reference{pages_[page - 1].id}, name{"XYZ"}, 0, pages_[page - 1].height - top, nullptr}; // the target page's height
     }
 
     std::uint32_t document::write_outline() {
@@ -184,7 +198,6 @@ namespace sc::pdflite {
         for (const auto &item: outline_)
             if (item.page > pages_.size()) throw std::out_of_range("sc::pdflite: a bookmark to page " + std::to_string(item.page) + ", which isn't there");
 
-        const array media_box{0, 0, width_, height_};
         array kids;
         for (auto &page: pages_) {
             const std::uint32_t contents = file_.allocate();
@@ -206,12 +219,12 @@ namespace sc::pdflite {
                 file_.write(id, annotation);
                 annotations.push_back(reference{id});
             }
-            dictionary entry{{"Type", name{"Page"}}, {"Parent", reference{pages_id_}}, {"MediaBox", media_box},
+            dictionary entry{{"Type", name{"Page"}}, {"Parent", reference{pages_id_}}, {"MediaBox", array{0, 0, page.width, page.height}},
                              {"Resources", resources}, {"Contents", reference{contents}}};
             if (!annotations.empty()) entry.add("Annots", annotations);
             file_.write(page.id, entry);
             kids.push_back(reference{page.id});
-            page.content = pdflite::content{height_}; // written: its text isn't needed any more
+            page.content = pdflite::content{page.height}; // written: its text isn't needed any more
         }
         file_.write(pages_id_, dictionary{{"Type", name{"Pages"}}, {"Kids", kids}, {"Count", pages_.size()}});
 
