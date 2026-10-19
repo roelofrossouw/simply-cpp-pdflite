@@ -40,6 +40,11 @@ What it writes so far:
   from FreeType's outlines (a variable font's at the instance asked for, a CFF font's curves turned
   quadratic), with a ToUnicode map so the text can be copied and searched, and the font's own
   widths. Measured with `width()`, `ascender()`, `descender()`, `cap_height()`.
+- **Passwords and permissions** (`pdflite/encryption.h`, `document::protect()`): AES-256
+  (revision 6), every string and stream encrypted, a user password to open the file (or none)
+  and an owner password for every right; printing, copying, changing, commenting, forms and
+  assembling allowed or not. The cryptography is OpenSSL's libcrypto. In a PDF 1.7 file it's
+  written with Adobe's extension level 8, as Acrobat writes it.
 - **Links:** an area of a page that opens a URI (written in 7-bit ASCII, percent-encoded), or
   goes to a page and a height on it, which needn't exist yet.
 - **Bookmarks:** the reader's outline, nested by level, with Unicode titles; the file opens with
@@ -468,18 +473,56 @@ SC_SHOW(std::filesystem::file_size(output)); // bytes: subsets, not whole fonts
 ```
 <!-- /sc-example -->
 
+## Passwords
+
+`sc-pdflite-passwords` writes a file that asks for a password to open and one anyone can open
+but only print. Its code, copied from `examples/sc-pdflite-passwords.cpp` at configure time:
+
+<!-- sc-example: examples/sc-pdflite-passwords.cpp -->
+```cpp
+sc::console::heading("A password to open it: everything in the file is encrypted");
+const auto locked = folder / "sc-pdflite-locked.pdf";
+sc::pdflite::document pdf{locked, sc::page_size::A5};
+page_of_text(pdf, "Opened with the password “open sesame”.");
+pdf.info("Title", "sc-pdflite: a password to open");
+pdf.info("Author", "Roelof Rossouw");
+pdf.info("Subject", "A PDF that asks for a password to open, encrypted with AES-256");
+pdf.info("Creator", "sc-pdflite-passwords");
+SC_STEP(pdf.protect({"open sesame", "admin"})); // user password, owner password
+SC_STEP(pdf.close());
+SC_SHOW(locked.string());
+
+sc::console::heading("Anyone may open it, and print; the rest takes the owner's password");
+const auto print_only = folder / "sc-pdflite-print-only.pdf";
+sc::pdflite::document open{print_only, sc::page_size::A5};
+page_of_text(open, "Anyone can open and print this; copying needs “admin”.");
+open.info("Title", "sc-pdflite: print only");
+open.info("Author", "Roelof Rossouw");
+open.info("Subject", "A PDF anyone can open and print; its other rights need the owner's password");
+open.info("Creator", "sc-pdflite-passwords");
+sc::pdflite::permissions allowed;
+allowed.print = true;
+allowed.copy = false;
+allowed.modify = false;
+SC_SHOW(allowed.bits()); // /P: what readers may do
+SC_STEP(open.protect({"", "admin", allowed})); // no user password: it opens without one
+SC_STEP(open.close());
+SC_SHOW(print_only.string());
+```
+<!-- /sc-example -->
+
 ## Checking the files
 
 Its tests check the files they write byte by byte (every cross-reference entry points at its
 object, `/Size` and `startxref` are right, the streams inflate), and with every PDF checker
 that's installed: `check-qpdf` (`qpdf --check`, warnings fail), `check-pdfcpu` (`pdfcpu validate
 -m strict`) and `check-mutool` (mutool draws every page, warning-free). A checker that isn't
-installed is left out. On macOS: `brew install qpdf pdfcpu mupdf`.
+installed is left out; an encrypted test file's password is in `<file>.password` beside it. On macOS: `brew install qpdf pdfcpu mupdf`.
 
 ## Building locally
 
 Run `bash scripts/install.sh` to configure, build, test, package and install.
-It needs sc-core, sc-graphics (installed if missing), zlib and FreeType.
+It needs sc-core, sc-graphics (installed if missing), zlib, FreeType and OpenSSL.
 
 ## Usage
 

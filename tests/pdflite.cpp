@@ -679,6 +679,85 @@ int main() {
         else std::cout << "no CFF font (" << cff << "): its test skipped\n";
     }
 
+    SECTION("Passwords and permissions: AES-256, opened again with either password");
+    {
+        CHECK_EQ(permissions{}.bits(), static_cast<std::int32_t>(0xFFFFFAC4u));        // print (well), accessibility
+        CHECK_EQ((permissions{false, false}).bits(), static_cast<std::int32_t>(0xFFFFF2C0u)); // nothing but accessibility
+        CHECK_THROWS_AS(encryption(protection{}), std::invalid_argument);           // no password: nothing to protect
+
+        const auto protected_file = output() / "protected.pdf";
+        {
+            document pdf{protected_file, sc::page_size::A5};
+            const auto font = pdf.standard_font(sc::standard_font::face::helvetica);
+            auto &page = pdf.page_content();
+            page.begin_text();
+            page.font(font, 14);
+            page.text_position(40, 60);
+            page.show("Secret plans");
+            page.end_text();
+            pdf.link(sc::rect{40, 40, 100, 20}, "https://example.com/hidden");
+            pdf.info("Title", "Top secret title");
+            pdf.protect({"open sesame", "owner-only", permissions{true, false}});   // print, at low resolution
+            pdf.close();
+        }
+        std::ofstream{protected_file.string() + ".password"} << "open sesame"; // for the checkers
+
+        const auto file = read(protected_file);
+        CHECK(structure_problem(file).empty());
+        CHECK(contains(file, "/Filter /Standard /V 5 /R 6 /Length 256 /CF << /StdCF << /AuthEvent /DocOpen /CFM /AESV3 /Length 32 >> >>"));
+        CHECK(contains(file, "/Extensions << /ADBE << /BaseVersion /1.7 /ExtensionLevel 8 >> >>"));
+        CHECK(contains(file, "/Encrypt "));
+        CHECK(!contains(file, "Top secret title"));                                 // the strings are encrypted
+        CHECK(!contains(file, "example.com"));
+        CHECK(contains(file, "/P -3388 "));                                          // 0xFFFFF2C4: print, low resolution
+
+        // The /Encrypt dictionary's strings, as written (hex, unencrypted).
+        const auto hex_of = [&](const std::string &key) {
+            std::smatch found;
+            const std::regex pattern{"/" + key + " <([0-9A-F]+)>"};
+            std::string bytes;
+            if (std::regex_search(file, found, pattern))
+                for (std::size_t i = 0; i + 1 < found[1].length(); i += 2) bytes += static_cast<char>(std::stoi(found[1].str().substr(i, 2), nullptr, 16));
+            return bytes;
+        };
+        const dictionary encrypt{{"R", 6}, {"U", string{hex_of("U"), true}}, {"O", string{hex_of("O"), true}},
+                                 {"UE", string{hex_of("UE"), true}}, {"OE", string{hex_of("OE"), true}}};
+        const auto by_user = encryption::key_for(encrypt, "open sesame");
+        const auto by_owner = encryption::key_for(encrypt, "owner-only");
+        CHECK(by_user.has_value());
+        CHECK(by_owner.has_value());
+        CHECK(by_user == by_owner);                                                  // one file key, either password
+        CHECK_EQ(by_user.value_or("").size(), std::size_t{32});
+        CHECK(!encryption::key_for(encrypt, "wrong"));
+        CHECK_THROWS_AS(encryption::key_for(dictionary{{"R", 4}}, "x"), std::invalid_argument);
+
+        // The page's content: decrypted with the key, then inflated.
+        bool found_text = false;
+        static const std::regex stream_head{R"(/Length (\d+) /Filter /FlateDecode >>\nstream\n)"};
+        for (std::sregex_iterator it{file.begin(), file.end(), stream_head}, end; it != end && by_user; ++it) {
+            const auto data = file.substr(it->position() + it->length(), std::stoul((*it)[1]));
+            const auto packed = encryption::decrypt(*by_user, data);
+            std::string plain(1 << 16, '\0');
+            uLongf size = plain.size();
+            if (uncompress(reinterpret_cast<Bytef *>(plain.data()), &size, reinterpret_cast<const Bytef *>(packed.data()), packed.size()) == Z_OK)
+                found_text = found_text || contains(plain.substr(0, size), "(Secret plans) Tj");
+        }
+        CHECK(found_text);
+        CHECK_THROWS_AS(encryption::decrypt(std::string(32, 'x'), file.substr(0, 48)), std::invalid_argument); // not ours
+
+        // Only an owner password: anyone opens it, the permissions apply.
+        const auto owner_file = output() / "owner-only.pdf";
+        {
+            document pdf{owner_file, sc::page_size::A5};
+            pdf.protect({"", "admin", permissions{}});
+            pdf.close();
+        }
+        const auto owned = read(owner_file);
+        const dictionary owner_encrypt{{"R", 6}, {"U", string{[&] { std::smatch m; std::regex_search(owned, m, std::regex{"/U <([0-9A-F]+)>"}); std::string b; for (std::size_t i = 0; i + 1 < m[1].length(); i += 2) b += static_cast<char>(std::stoi(m[1].str().substr(i, 2), nullptr, 16)); return b; }(), true}},
+                                       {"O", string{std::string(48, '\0'), true}}, {"UE", string{std::string(32, '\0'), true}}, {"OE", string{std::string(32, '\0'), true}}};
+        CHECK(encryption::key_for(owner_encrypt, "").has_value());                   // the empty user password opens it
+    }
+
     SECTION("Links and bookmarks");
     const auto links_file = output() / "links.pdf";
     {

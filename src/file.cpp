@@ -44,8 +44,29 @@ namespace sc::pdflite {
         put(std::to_string(id) + " 0 obj\n");
     }
 
+    void file::encrypt(std::shared_ptr<const encryption> with, const std::uint32_t exempt) {
+        encryption_ = std::move(with);
+        exempt_ = exempt;
+    }
+
+    pdflite::object file::sealed(const pdflite::object &value, const std::uint32_t id) const {
+        if (!encryption_ || id == exempt_) return value;
+        if (value.is<string>()) return string{encryption_->encrypt(value.as<string>().bytes()), true};
+        if (value.is<array>()) {
+            array out;
+            for (const auto &item: value.as<array>()) out.push_back(sealed(item, id));
+            return out;
+        }
+        if (value.is<dictionary>()) {
+            dictionary out;
+            for (const auto &[key, item]: value.as<dictionary>()) out.add(key.text(), sealed(item, id));
+            return out;
+        }
+        return value;
+    }
+
     void file::write(const std::uint32_t id, const pdflite::object &value) {
-        const std::string text = value.write(); // before start(): a value that can't be written leaves no trace
+        const std::string text = sealed(value, id).write(); // before start(): a value that can't be written leaves no trace
         start(id);
         put(text);
         put("\nendobj\n");
@@ -55,10 +76,11 @@ namespace sc::pdflite {
         if (entries.contains("Length")) throw std::invalid_argument("sc::pdflite: a stream's /Length is written for it");
         if (compress && entries.contains("Filter"))
             throw std::invalid_argument("sc::pdflite: a compressed stream's /Filter is written for it");
-        const std::string packed = compress ? deflate(data) : std::string{data};
+        std::string packed = compress ? deflate(data) : std::string{data};
+        if (encryption_ && id != exempt_) packed = encryption_->encrypt(packed); // after the filters, as readers undo it first
         entries.add("Length", packed.size());
         if (compress) entries.add("Filter", name{"FlateDecode"});
-        const std::string head = entries.write();
+        const std::string head = sealed(entries, id).write();
         start(id);
         put(head);
         put("\nstream\n"); // the end of line after "stream" is a line feed, never a lone return
@@ -66,7 +88,7 @@ namespace sc::pdflite {
         put("\nendstream\nendobj\n");
     }
 
-    void file::finish(const std::uint32_t root, const std::uint32_t info) {
+    void file::finish(const std::uint32_t root, const std::uint32_t info, const std::uint32_t encrypt) {
         if (finished_) return;
         for (std::size_t i = 0; i < offsets_.size(); ++i)
             if (offsets_[i] == 0) throw std::logic_error("sc::pdflite: object " + std::to_string(i + 1) + " was never written");
@@ -85,6 +107,7 @@ namespace sc::pdflite {
         for (int i = 0; i < 16; ++i) id += static_cast<char>(random() & 0xFF);
         dictionary trailer{{"Size", offsets_.size() + 1}, {"Root", reference{root}}};
         if (info != 0) trailer.add("Info", reference{info});
+        if (encrypt != 0) trailer.add("Encrypt", reference{encrypt});
         trailer.add("ID", array{string{id, true}, string{id, true}});
         put("trailer\n" + trailer.write() + "\nstartxref\n" + std::to_string(table) + "\n%%EOF\n");
         out_.close();
