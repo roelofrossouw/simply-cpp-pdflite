@@ -37,12 +37,6 @@ namespace sc::pdflite {
     }
 
     namespace {
-        array rect_of(const area &where) {
-            array rect{where.left, where.bottom, where.right, where.top}; // throws when one isn't finite
-            if (where.right < where.left || where.top < where.bottom) throw std::invalid_argument("sc::pdflite: an inverted area");
-            return rect;
-        }
-
         // A URI in 7-bit ASCII (12.6.4.7): bytes outside ! to ~ percent-encoded, as RFC 3986 has
         // it for UTF-8.
         std::string ascii_uri(const std::string_view url) {
@@ -63,6 +57,12 @@ namespace sc::pdflite {
     document::document(const std::filesystem::path &path, const sc::page_size paper, const sc::orientation turned)
         : document(path, sc::page_dimensions(paper, turned).width(), sc::page_dimensions(paper, turned).height()) {}
 
+    array document::rect_of(const sc::rect &where) const {
+        if (where.width() < 0 || where.height() < 0) throw std::invalid_argument("sc::pdflite: an area with a negative size");
+        // PDF's Rect is [left bottom right top], y up; numbers that aren't finite throw here.
+        return {where.left(), height_ - where.bottom(), where.right(), height_ - where.top()};
+    }
+
     document::~document() {
         try {
             close();
@@ -77,7 +77,7 @@ namespace sc::pdflite {
 
     void document::add_page() {
         check_open();
-        pages_.push_back({file_.allocate(), {}, {}});
+        pages_.push_back({file_.allocate(), pdflite::content{height_}, {}, {}});
         current_ = pages_.size() - 1;
     }
 
@@ -122,13 +122,13 @@ namespace sc::pdflite {
         info_.insert_or_assign(std::string{key}, string::text(value));
     }
 
-    void document::link(const area &where, const std::string_view url) {
+    void document::link(const sc::rect &where, const std::string_view url) {
         check_open();
         if (url.empty()) throw std::invalid_argument("sc::pdflite: a link to an empty URI");
         pages_[current_].links.push_back({rect_of(where), string{ascii_uri(url)}, 0, 0});
     }
 
-    void document::link(const area &where, const std::size_t page, const double top) {
+    void document::link(const sc::rect &where, const std::size_t page, const double top) {
         check_open();
         if (page == 0) throw std::out_of_range("sc::pdflite: pages count from 1");
         number(top); // throws when it isn't finite
@@ -143,7 +143,7 @@ namespace sc::pdflite {
     }
 
     array document::destination(const std::size_t page, const double top) const {
-        return {reference{pages_[page - 1].id}, name{"XYZ"}, 0, top, nullptr};
+        return {reference{pages_[page - 1].id}, name{"XYZ"}, 0, height_ - top, nullptr};
     }
 
     std::uint32_t document::write_outline() {
@@ -223,7 +223,7 @@ namespace sc::pdflite {
             if (!annotations.empty()) entry.add("Annots", annotations);
             file_.write(page.id, entry);
             kids.push_back(reference{page.id});
-            page.content = {}; // written: its text isn't needed any more
+            page.content = pdflite::content{height_}; // written: its text isn't needed any more
         }
         file_.write(pages_id_, dictionary{{"Type", name{"Pages"}}, {"Kids", kids}, {"Count", pages_.size()}});
 

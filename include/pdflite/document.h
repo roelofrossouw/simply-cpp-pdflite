@@ -6,6 +6,7 @@
 #include "object.h"
 
 #include <page.h>
+#include <rect.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -18,11 +19,6 @@
 
 // sc-pdflite's document: pages, the built-in fonts they use, and the document's information.
 namespace sc::pdflite {
-
-    // An area of a page, in PDF's coordinates: points, y up from the bottom (a Rect, 7.9.5).
-    struct area {
-        double left, bottom, right, top;
-    };
 
     // A PDF document: pages of one size, each with a content stream, the built-in fonts they use,
     // and the document's information. The file is created at once and finished by close(): the
@@ -81,21 +77,22 @@ namespace sc::pdflite {
         // Throws std::invalid_argument for those three keys or an empty one.
         void info(std::string_view key, std::string_view value);
 
-        // Makes where (on the current page) a link to url (a URI action, 12.6.4.7). The URI is
-        // written in 7-bit ASCII: other bytes, spaces and control characters percent-encoded.
-        // Throws std::invalid_argument for an area that's inverted or not finite, or an empty url.
-        void link(const area &where, std::string_view url);
+        // Makes where (on the current page; points from its top-left corner, y down, as on
+        // sc-graphics' canvas) a link to url (a URI action, 12.6.4.7). The URI is written in 7-bit
+        // ASCII: other bytes, spaces and control characters percent-encoded. Throws
+        // std::invalid_argument for an area that's negative or not finite, or an empty url.
+        void link(const sc::rect &where, std::string_view url);
 
-        // Makes where (on the current page) a link to page (counting from 1), shown from top (a y
-        // in points, from the bottom) down (an /XYZ destination, 12.3.2.2). The page needn't exist
-        // yet; close() throws std::out_of_range when it doesn't by then.
-        void link(const area &where, std::size_t page, double top);
+        // Makes where a link to page (counting from 1), shown from top (points from the page's top)
+        // down (an /XYZ destination, 12.3.2.2). The page needn't exist yet; close() throws
+        // std::out_of_range when it doesn't by then.
+        void link(const sc::rect &where, std::size_t page, double top = 0);
 
         // A bookmark in the reader's outline (12.3.3), to page from top down: level 0 is the
         // outermost, and each deeper level goes under the bookmark before it (a level more than
         // one deeper than that one's counts as one deeper). Bookmarks keep the order they're added
         // in and start closed. The page is checked by close(), like a link's.
-        void bookmark(std::string_view title, std::size_t page, double top, int level = 0);
+        void bookmark(std::string_view title, std::size_t page, double top = 0, int level = 0);
 
         // Finishes the file. Throws std::logic_error when a page's content isn't complete (an open
         // q, text object or path), std::runtime_error when writing failed; nothing can be added
@@ -110,10 +107,10 @@ namespace sc::pdflite {
             pdflite::content content;
             std::map<std::string, std::string> fonts; // base font: its resource name here
             struct link {
-                array rect;                         // [left bottom right top]
+                array rect;                         // [left bottom right top], in PDF's coordinates
                 std::optional<pdflite::string> uri; // a URI action's, or else a page and a top
                 std::size_t page;
-                double top;
+                double top;                         // from the page's top
             };
             std::vector<link> links;
         };
@@ -125,7 +122,10 @@ namespace sc::pdflite {
             int level;
         };
 
-        // [page /XYZ 0 top null]
+        // where as PDF's Rect, [left bottom right top] with y up.
+        [[nodiscard]] array rect_of(const sc::rect &where) const;
+
+        // [page /XYZ 0 top null], top turned into PDF's y.
         [[nodiscard]] array destination(std::size_t page, double top) const;
 
         // Writes the outline's objects; returns the root's number (0 without bookmarks).

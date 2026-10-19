@@ -146,7 +146,7 @@ int main() {
 
     SECTION("The content stream keeps PDF's rules");
     {
-        content c;
+        content c{842};
         CHECK_THROWS_AS(c.restore(), std::logic_error);        // Q without q
         CHECK_THROWS_AS(c.line(1, 1), std::logic_error);       // l without m
         CHECK_THROWS_AS(c.fill(), std::logic_error);           // nothing to fill
@@ -171,7 +171,7 @@ int main() {
         c.restore();
 
         // The font is part of the graphics state: Q brings back the one before q.
-        content state;
+        content state{842};
         state.save();
         state.font("F1", 10);
         state.restore();
@@ -187,7 +187,7 @@ int main() {
     {
         document pdf{fonts_file, 595.2756, 841.8898}; // any size in points: A4 to the hundredth of a millimetre
         auto &page = pdf.page_content();
-        double y = 800;
+        double y = 42; // from the top
         for (const char *font: {"Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
                                 "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
                                 "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique"}) {
@@ -197,7 +197,7 @@ int main() {
             page.text_position(50, y);
             page.show(*document::win_ansi(std::string{font} + ": Caf\xC3\xA9 (\xE2\x82\xAC 5) \\ fin"));
             page.end_text();
-            y -= 24;
+            y += 24;
         }
         CHECK_EQ(pdf.standard_font("Helvetica"), std::string{"F1"}); // the same font, the same name
         CHECK_THROWS_AS(pdf.standard_font("Arial"), std::invalid_argument);
@@ -235,18 +235,19 @@ int main() {
         first.fill_colour(0.2, 0.4, 0.6);
         first.stroke_colour(0, 0, 0);
         first.line_width(2);
-        first.rectangle(72, 600, 200, 100);
+        first.rectangle(72, 92, 200, 100);                // y down: written from the bottom, 792 - 92 - 100
         first.fill_and_stroke();
-        first.move(300, 600);
-        first.curve(350, 700, 450, 700, 500, 600);
+        first.move(300, 192);
+        first.curve(350, 92, 450, 92, 500, 192);
         first.close_path();
         first.fill(true);
         first.restore();
         first.save();
-        first.rectangle(72, 72, 100, 100);
+        first.rectangle(72, 620, 100, 100);
         first.clip();
         first.end_path();
-        first.transform(1, 0, 0, 1, 10, 10);
+        first.transform(1, 0, 0, 1, 10, 10); // right and down
+        first.transform(2, 0, 0, 2, 0, 0);   // twice the size, about the top-left corner
         first.move(0, 0);
         first.line(300, 300);
         first.stroke();
@@ -256,7 +257,7 @@ int main() {
         auto &third = pdf.page_content();
         third.begin_text();
         third.font(font, 10);
-        third.text_position(72, 720);
+        third.text_position(72, 72); // the baseline an inch from the top
         third.show("Page three");
         third.end_text();
         CHECK_THROWS_AS(pdf.set_page(4), std::out_of_range);
@@ -275,6 +276,10 @@ int main() {
         CHECK(contains(streams, "0.2 0.4 0.6 rg"));
         CHECK(contains(streams, "300 600 m\n350 700 450 700 500 600 c\nh\nf*"));
         CHECK(contains(streams, "72 72 100 100 re\nW\nn"));
+        CHECK(contains(streams, "72 600 200 100 re\n"));
+        CHECK(contains(streams, "1 0 0 1 10 -10 cm"));  // down is y down in PDF's terms
+        CHECK(contains(streams, "2 0 0 2 0 -792 cm"));  // the top-left corner stays where it is
+        CHECK(contains(streams, "1 0 0 1 72 720 Tm"));
         CHECK(contains(streams, "(Page three) Tj"));
     }
 
@@ -286,20 +291,21 @@ int main() {
         auto &first = pdf.page_content();
         first.begin_text();
         first.font(font, 12);
-        first.text_position(72, 760);
+        first.text_position(72, 82);
         first.show("A link to example.com, and one to page 2");
         first.end_text();
-        pdf.link({72, 755, 300, 775}, "https://example.com/a b/caf\xC3\xA9?x=(1)"); // a space, UTF-8 and brackets
-        pdf.link({72, 730, 300, 750}, 2, 800); // a page that isn't there yet
-        CHECK_THROWS_AS(pdf.link({300, 0, 100, 10}, "https://example.com"), std::invalid_argument); // inverted
-        CHECK_THROWS_AS(pdf.link({0, 0, 10, 10}, ""), std::invalid_argument);
-        CHECK_THROWS_AS(pdf.link({0, 0, 10, 10}, 0, 0), std::out_of_range);
-        pdf.bookmark("Chapter 1", 1, 841);
-        pdf.bookmark("Section 1.1", 1, 700, 1);
-        pdf.bookmark("Detail 1.1.1", 1, 650, 2);
-        pdf.bookmark("Section 1.2 \xE2\x80\x93 caf\xC3\xA9", 2, 800, 1); // UTF-16
-        pdf.bookmark("Chapter 2", 2, 841);
-        pdf.bookmark("Deep jump", 2, 400, 5); // more than one deeper: under Chapter 2
+        const double h = pdf.height();
+        pdf.link(sc::rect{72, h - 775, 228, 20}, "https://example.com/a b/caf\xC3\xA9?x=(1)"); // a space, UTF-8 and brackets
+        pdf.link(sc::rect{72, h - 750, 228, 20}, 2, h - 800); // a page that isn't there yet
+        CHECK_THROWS_AS(pdf.link(sc::rect{std::numeric_limits<double>::quiet_NaN(), 0, 10, 10}, "https://example.com"), std::invalid_argument);
+        CHECK_THROWS_AS(pdf.link(sc::rect{0, 0, 10, 10}, ""), std::invalid_argument);
+        CHECK_THROWS_AS(pdf.link(sc::rect{0, 0, 10, 10}, 0, 0), std::out_of_range);
+        pdf.bookmark("Chapter 1", 1);                 // from the top of the page
+        pdf.bookmark("Section 1.1", 1, 140, 1);
+        pdf.bookmark("Detail 1.1.1", 1, 190, 2);
+        pdf.bookmark("Section 1.2 \xE2\x80\x93 caf\xC3\xA9", 2, 40, 1); // UTF-16
+        pdf.bookmark("Chapter 2", 2);
+        pdf.bookmark("Deep jump", 2, 440, 5); // more than one deeper: under Chapter 2
         pdf.add_page();
         pdf.close();
     }
@@ -309,7 +315,8 @@ int main() {
         CHECK_MSG(problem.empty(), problem);
         CHECK(contains(file, "/S /URI /URI (https://example.com/a%20b/caf%C3%A9?x=\\(1\\))"));
         CHECK(contains(file, "/Subtype /Link /Rect [72 730 300 750] /F 4 /Border [0 0 0] /Dest ["));
-        CHECK(contains(file, " /XYZ 0 800 null]"));
+        CHECK(contains(file, " /XYZ 0 800 null]"));     // h - (h - 800)
+        CHECK(contains(file, " /XYZ 0 841.8898 null]")); // a bookmark to the top
         CHECK(contains(file, "/Annots ["));
         CHECK(contains(file, "/Type /Outlines /First "));
         CHECK(contains(file, "/Count 2 >>"));           // two chapters at the top
@@ -322,7 +329,7 @@ int main() {
         // A link or bookmark to a page that never comes: close() refuses before writing anything.
         const auto missing = fs::temp_directory_path() / "sc-pdflite-missing-page.pdf"; // not for the checkers
         document pdf{missing, 200, 200};
-        pdf.link({0, 0, 10, 10}, 3, 0);
+        pdf.link(sc::rect{0, 0, 10, 10}, 3);
         CHECK_THROWS_AS(pdf.close(), std::out_of_range);
         CHECK(!pdf.closed());
         pdf.add_page();

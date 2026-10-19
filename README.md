@@ -31,7 +31,9 @@ Still to come: images (JPEG and PNG), then embedded fonts through FreeType.
 Values are checked as they're written: a number that isn't finite, a page side readers can't show
 (outside 3 to 14,400 points) or malformed UTF-8 throws `std::invalid_argument`.
 
-Coordinates are PDF's own: points (1/72 inch), y up from the bottom of the page.
+Positions are the same as on sc-graphics' canvas: points (1/72 inch) from the page's top-left
+corner, y down, and areas are sc-core's `sc::rect`. They're turned into PDF's own (y up from
+the bottom) as they're written, transforms included.
 
 Each part has its own header (and source), to work on and include alone: `pdflite/object.h`
 (PDF's values: `name`, `string`, `reference`, `array`, `dictionary`, and `object` holding any of
@@ -66,14 +68,14 @@ const double width = metrics->width(heading, 28);
 SC_SHOW(width); // Adobe's widths: lines are measured as readers draw them
 page.begin_text();
 page.font(bold, 28);
-page.text_position((pdf.width() - width) / 2, 760); // centred
+page.text_position((pdf.width() - width) / 2, 82); // centred, the baseline 82 points from the top
 page.show(*sc::pdflite::document::win_ansi(heading));
 page.end_text();
 
 const auto serif = pdf.standard_font("Times-Roman");
 page.begin_text();
 page.font(serif, 13);
-page.text_position(72, 720);
+page.text_position(72, 122);
 SC_STEP(page.show(*sc::pdflite::document::win_ansi("Strict PDF 1.7, no library but zlib: caf\xC3\xA9, \xE2\x82\xAC 12, (brackets) and \\.")));
 page.end_text();
 
@@ -82,26 +84,26 @@ page.save();
 page.fill_colour(0.85, 0.93, 0.98);
 page.stroke_colour(0.16, 0.44, 0.59);
 page.line_width(2);
-SC_STEP(page.rectangle(72, 560, 220, 120));
+SC_STEP(page.rectangle(72, 162, 220, 120)); // left, top, width, height
 SC_STEP(page.fill_and_stroke());
 page.fill_colour(0.93, 0.42, 0.3);
-page.move(320, 560);
-page.curve(360, 700, 480, 700, 520, 560);
+page.move(320, 282);
+page.curve(360, 142, 480, 142, 520, 282);
 page.close_path();
 SC_STEP(page.fill());
 page.restore();
 
 sc::console::heading("Clipping: W n, then everything drawn is cut to it");
 page.save();
-page.rectangle(72, 380, 200, 140);
+page.rectangle(72, 322, 200, 140);
 page.clip();
 page.end_path();
 page.fill_colour(0.96, 0.83, 0.37);
 for (int i = 0; i < 8; ++i) {
-    page.move(72 + i * 40, 380);
-    page.line(32 + i * 40, 520);
-    page.line(52 + i * 40, 520);
-    page.line(92 + i * 40, 380);
+    page.move(72 + i * 40, 462);
+    page.line(32 + i * 40, 322);
+    page.line(52 + i * 40, 322);
+    page.line(92 + i * 40, 462);
     page.close_path();
     page.fill();
 }
@@ -114,7 +116,7 @@ auto &second = pdf.page_content();
 const auto mono = pdf.standard_font("Courier");
 second.begin_text();
 second.font(mono, 11);
-second.text_position(72, 760);
+second.text_position(72, 82);
 second.show("Page two, in Courier.");
 second.end_text();
 SC_STEP(pdf.info("Title", "sc-pdflite demo"));
@@ -132,7 +134,7 @@ on each chapter, a web link, and bookmarks for the reader's outline. Its code, c
 <!-- sc-example: examples/sc-pdflite-links.cpp -->
 ```cpp
 sc::pdflite::document pdf{output, sc::page_size::A4};
-const double top = pdf.height() - 72;                  // an inch from the top
+const double top = 72; // the headings' baselines, an inch from the top
 const std::vector<std::string> chapters{"Getting started", "Drawing", "Text and fonts"};
 
 sc::console::heading("Pages first: a link may go to a page that comes later, but it must be there by close()");
@@ -143,30 +145,30 @@ sc::console::heading("The contents page: each line a link to its chapter (link(a
 pdf.set_page(1);
 write_line(pdf, "Helvetica-Bold", 24, 72, top, "Contents");
 for (std::size_t i = 0; i < chapters.size(); ++i) {
-    const auto line = write_line(pdf, "Times-Roman", 14, 90, top - 50 - 24.0 * i, std::to_string(i + 1) + ". " + chapters[i]);
-    SC_STEP(pdf.link(line, i + 2, top + 20)); // the chapter's page, from just above its heading
+    const auto line = write_line(pdf, "Times-Roman", 14, 90, top + 50 + 24.0 * i, std::to_string(i + 1) + ". " + chapters[i]);
+    SC_STEP(pdf.link(line, i + 2, top - 20)); // the chapter's page, from just above its heading
 }
 
 sc::console::heading("A web link (link(area, url)): the address is written in ASCII, percent-encoded");
-const auto site = write_line(pdf, "Helvetica", 11, 72, 100, "simply-cpp on GitHub");
+const auto site = write_line(pdf, "Helvetica", 11, 72, pdf.height() - 100, "simply-cpp on GitHub");
 SC_STEP(pdf.link(site, "https://github.com/roelofrossouw/simply-cpp"));
 
 sc::console::heading("Chapters, each with a way back to the contents");
 for (std::size_t i = 0; i < chapters.size(); ++i) {
     pdf.set_page(i + 2);
     write_line(pdf, "Helvetica-Bold", 20, 72, top, std::to_string(i + 1) + ". " + chapters[i]);
-    write_line(pdf, "Times-Roman", 12, 72, top - 40, "Section " + std::to_string(i + 1) + ".1");
-    write_line(pdf, "Times-Roman", 12, 72, top - 300, "Section " + std::to_string(i + 1) + ".2");
-    const auto back = write_line(pdf, "Helvetica", 10, 72, 60, "Back to the contents");
-    pdf.link(back, 1, top + 20);
+    write_line(pdf, "Times-Roman", 12, 72, top + 40, "Section " + std::to_string(i + 1) + ".1");
+    write_line(pdf, "Times-Roman", 12, 72, top + 300, "Section " + std::to_string(i + 1) + ".2");
+    const auto back = write_line(pdf, "Helvetica", 10, 72, pdf.height() - 60, "Back to the contents");
+    pdf.link(back, 1); // the top of the contents page
 }
 
 sc::console::heading("Bookmarks: level 0 for chapters, 1 for their sections");
-SC_STEP(pdf.bookmark("Contents", 1, top + 20));
+SC_STEP(pdf.bookmark("Contents", 1)); // the top of page 1
 for (std::size_t i = 0; i < chapters.size(); ++i) {
-    SC_STEP(pdf.bookmark(chapters[i], i + 2, top + 20));
-    pdf.bookmark("Section " + std::to_string(i + 1) + ".1", i + 2, top - 25, 1);
-    pdf.bookmark("Section " + std::to_string(i + 1) + ".2", i + 2, top - 285, 1);
+    SC_STEP(pdf.bookmark(chapters[i], i + 2, top - 20));
+    pdf.bookmark("Section " + std::to_string(i + 1) + ".1", i + 2, top + 25, 1);
+    pdf.bookmark("Section " + std::to_string(i + 1) + ".2", i + 2, top + 285, 1);
 }
 pdf.info("Title", "sc-pdflite: links and bookmarks");
 SC_STEP(pdf.close());
