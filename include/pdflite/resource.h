@@ -15,9 +15,6 @@ namespace sc::pdflite {
     public:
         virtual ~resource() = default;
 
-        // Where it goes in a page's /Resources: "XObject", "Font", "ExtGState".
-        [[nodiscard]] virtual std::string_view category() const = 0;
-
         // The prefix of its names there: "Im" makes /Im1, /Im2, ...
         [[nodiscard]] virtual std::string_view prefix() const = 0;
 

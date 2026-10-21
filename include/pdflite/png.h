@@ -43,8 +43,6 @@ namespace sc::pdflite {
         // Whether write() copies its compressed data as it is (no transparency, not interlaced).
         [[nodiscard]] bool copied() const { return !transparent() && !interlaced(); }
 
-        [[nodiscard]] std::string_view category() const override { return "XObject"; }
-
         [[nodiscard]] std::string_view prefix() const override { return "Im"; }
 
         void write(file &out, std::uint32_t id) const override;

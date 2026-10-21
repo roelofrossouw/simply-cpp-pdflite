@@ -2,6 +2,7 @@
 #define SC_PDFLITE_CONTENT_H
 
 #include <distance.h>
+#include <path.h>
 #include <rect.h>
 #include <transform.h>
 
@@ -40,12 +41,14 @@ namespace sc::pdflite {
         void curve(sc::distance x1, sc::distance y1, sc::distance x2, sc::distance y2, sc::distance x3, sc::distance y3); // c
         void close_path();                                                         // h
         void rectangle(sc::distance left, sc::distance top, sc::distance width, sc::distance height); // re
+        void path(const sc::path &shape);                                          // m, l, c and h, step by step
 
         // Painting a path (and ending it), or making it the clip.
         void fill(bool even_odd = false);              // f, f*
         void stroke();                                 // S
         void fill_and_stroke(bool even_odd = false);   // B, B*
         void end_path();                               // n
+        void paint(bool filled, bool stroked, bool even_odd = false); // B, B*, f, f*, S, or n for neither
         void clip(bool even_odd = false);              // W, W*; the path is still to be painted or ended
 
         // Text.
@@ -77,7 +80,7 @@ namespace sc::pdflite {
         void op(std::string_view line);
         void outside_text(std::string_view what) const;
         void path_step(std::string_view what);
-        void paint(std::string_view line);
+        void finish_path(std::string_view line);
 
         [[nodiscard]] double y(double down) const { return height_ - down; } // PDF's y
 

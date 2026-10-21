@@ -24,6 +24,16 @@ namespace sc::pdflite {
             check_size(width, height);
             return path;
         }
+
+        // The page's name for key, or the first time, after write_once() has made sure the file
+        // gets it, prefix and number.
+        template <typename Key, typename WriteOnce>
+        std::string page_name(std::map<Key, std::string> &names, const Key &key, WriteOnce &&write_once, const std::string_view prefix,
+                              const std::size_t number) {
+            if (const auto found = names.find(key); found != names.end()) return found->second;
+            write_once();
+            return names[key] = std::string{prefix} + std::to_string(number);
+        }
     }
 
     document::document(const std::filesystem::path &path, const sc::size_<sc::distance> &size)
@@ -99,23 +109,17 @@ namespace sc::pdflite {
     std::string document::standard_font(const sc::standard_font::face which) {
         check_open();
         auto &page = pages_[current_];
-        if (const auto found = page.fonts.find(which); found != page.fonts.end()) return found->second;
-        if (!fonts_.contains(which)) fonts_[which] = file_.allocate();
-        const std::string resource = "F" + std::to_string(page.fonts.size() + page.embedded.size() + 1);
-        page.fonts[which] = resource;
-        return resource;
+        return page_name(page.fonts, which, [&] { if (!fonts_.contains(which)) fonts_[which] = file_.allocate(); },
+                         "F", page.fonts.size() + page.embedded.size() + 1);
     }
 
     std::string document::font(const pdflite::font &embedded) {
         check_open();
         const void *key = embedded.identity();
         auto &page = pages_[current_];
-        if (const auto found = page.embedded.find(key); found != page.embedded.end()) return found->second;
-        if (!embedded_.contains(key)) embedded_.emplace(key, written_font{embedded, file_.allocate()});
-        // Named after the page's built-in fonts, so the two never share a name.
-        const std::string resource = "F" + std::to_string(page.fonts.size() + page.embedded.size() + 1);
-        page.embedded[key] = resource;
-        return resource;
+        // Numbered after the page's built-in fonts too, so the two never share a name.
+        return page_name(page.embedded, key, [&] { if (!embedded_.contains(key)) embedded_.emplace(key, written_font{embedded, file_.allocate()}); },
+                         embedded.prefix(), page.fonts.size() + page.embedded.size() + 1);
     }
 
     std::string document::graphics_state(const double fill_alpha, const double stroke_alpha) {
@@ -124,22 +128,15 @@ namespace sc::pdflite {
             throw std::invalid_argument("sc::pdflite: an alpha outside 0 to 1");
         const std::pair key{fill_alpha, stroke_alpha};
         auto &page = pages_[current_];
-        if (const auto found = page.states.find(key); found != page.states.end()) return found->second;
-        if (!states_.contains(key)) states_[key] = file_.allocate();
-        const std::string resource = "GS" + std::to_string(page.states.size() + 1);
-        page.states[key] = resource;
-        return resource;
+        return page_name(page.states, key, [&] { if (!states_.contains(key)) states_[key] = file_.allocate(); }, "GS", page.states.size() + 1);
     }
 
     std::string document::image(const pdflite::image &picture) {
         check_open();
         const void *key = picture.identity();
         auto &page = pages_[current_];
-        if (const auto found = page.images.find(key); found != page.images.end()) return found->second;
-        if (!images_.contains(key)) images_.emplace(key, written_image{picture.clone(), file_.allocate()});
-        const std::string resource = std::string{picture.prefix()} + std::to_string(page.images.size() + 1);
-        page.images[key] = resource;
-        return resource;
+        return page_name(page.images, key, [&] { if (!images_.contains(key)) images_.emplace(key, written_image{picture.clone(), file_.allocate()}); },
+                         picture.prefix(), page.images.size() + 1);
     }
 
     std::optional<std::string> document::win_ansi(const std::string_view utf8) {
