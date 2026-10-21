@@ -8,16 +8,15 @@
 #include <string>
 #include <string_view>
 
-// sc-pdflite's PNG images (ISO 32000-1, 8.9; PNG: ISO/IEC 15948).
 namespace sc::pdflite {
-    // A PNG image. One without transparency that isn't interlaced (grey, RGB or a palette, at any bit
-    // depth) is written as it is: its compressed data with PNG's own predictors (FlateDecode with
-    // /Predictor 15), nothing decoded. Any other is decoded with zlib: interlacing undone, colours
-    // written at 8 bits, and its transparency (an alpha channel, a palette's alpha, or a key
-    // colour) as a soft mask (/SMask, 11.6.5.3). It's checked when it's made, throwing
-    // std::invalid_argument: the signature, every chunk's CRC, the chunks' order, IHDR's values,
-    // and no critical chunk PNG doesn't define. Colour profiles and gamma (iCCP, gAMA, ...) aren't
-    // applied.
+    // A PNG image (ISO 32000-1, 8.9; PNG: ISO/IEC 15948). One without transparency that isn't
+    // interlaced (grey, RGB or a palette, at any bit depth) is written as it is: its compressed
+    // data with PNG's own predictors (FlateDecode with /Predictor 15), nothing decoded. Any other
+    // is decoded with zlib: interlacing undone, colours written at 8 bits, and its transparency (an
+    // alpha channel, a palette's alpha, or a key colour) as a soft mask (/SMask, 11.6.5.3). It's
+    // checked when it's made, throwing std::invalid_argument: the signature, every chunk's CRC, the
+    // chunks' order, IHDR's values, and no critical chunk PNG doesn't define. Colour profiles and
+    // gamma (iCCP, gAMA, ...) aren't applied.
     class png : public image {
     public:
         // A PNG file; throws std::runtime_error when it can't be read.

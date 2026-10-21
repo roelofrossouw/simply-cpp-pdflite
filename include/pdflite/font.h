@@ -11,18 +11,17 @@
 #include <string>
 #include <string_view>
 
-// sc-pdflite's embedded fonts (ISO 32000-1, 9.7 and 9.9): any font FreeType reads, embedded as a
-// subset of the glyphs the document uses.
 namespace sc::pdflite {
-    // A font embedded in the document: read by FreeType, written as a Type0 font (Identity-H, two
-    // bytes a glyph) over a CIDFontType2 whose TrueType program is made of just the glyphs used,
-    // their outlines as FreeType gives them: a variable font's at the instance asked for (so bold is
-    // bold), composite glyphs flattened, a CFF font's cubic curves turned into TrueType's quadratic
-    // ones. It has the tables PDF asks for (head, hhea, maxp, loca, glyf, hmtx, post) and no
-    // hinting. A ToUnicode map lets readers copy and search the text; widths are the font's own.
+    // A font embedded in the document (ISO 32000-1, 9.7 and 9.9): read by FreeType, written as a
+    // Type0 font (Identity-H, two bytes a glyph) over a CIDFontType2 whose TrueType program is made
+    // of just the glyphs used, their outlines as FreeType gives them: a variable font's at the
+    // instance asked for (so bold is bold), composite glyphs flattened, a CFF font's cubic curves
+    // turned into TrueType's quadratic ones. It has the tables PDF asks for (head, hhea, maxp,
+    // loca, glyf, hmtx, post) and no hinting. A ToUnicode map lets readers copy and search the
+    // text; widths are the font's own.
     //
-    // Text is put into glyphs with encode(), which also records them for the subset, so a font
-    // is written by the document after everything has been drawn. A character the font has no glyph
+    // Text is put into glyphs with encode(), which also records them for the subset, so a font is
+    // written by the document after everything has been drawn. A character the font has no glyph
     // for is drawn as its .notdef (usually a box); covers() tells. No kerning or ligatures. Copies
     // share the font, and a document writes it once.
     class font : public resource {

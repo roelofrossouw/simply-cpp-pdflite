@@ -7,11 +7,10 @@
 
 #include <memory>
 
-// sc-pdflite's pictures (ISO 32000-1, 8.9 and 8.10): what content::draw() places through its unit
-// square. Each kind has its own header: jpeg.h, png.h, svg.h.
 namespace sc::pdflite {
-    // Something drawn into a page's unit square, top-left (0, 0) to bottom-right (1, 1): a JPEG,
-    // a PNG or an SVG drawing. A document writes each once however often it's drawn; copies of one
+    // Something content::draw() places through a page's unit square, top-left (0, 0) to
+    // bottom-right (1, 1) (ISO 32000-1, 8.9 and 8.10): a JPEG, a PNG or an SVG drawing (jpeg.h,
+    // png.h, svg.h). A document writes each once however often it's drawn; copies of one
     // count as the same (they share their data).
     class image : public resource {
     public:

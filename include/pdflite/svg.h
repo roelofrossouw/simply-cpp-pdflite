@@ -9,15 +9,14 @@
 #include <memory>
 #include <string_view>
 
-// sc-pdflite's SVG drawings (ISO 32000-1, 8.10: form XObjects).
 namespace sc::pdflite {
-    // An SVG drawing, read by sc-graphics (sc::drawing), written as a form XObject: vectors, so it
-    // stays sharp at any size, drawn with content::draw() like any picture. Its shapes keep their
-    // strokes, fills (nonzero or even-odd), clips and transparency (graphics states); its text is
-    // written in PDF's built-in fonts (sc::standard_font::of() the label's font, else Helvetica of
-    // its weight and slant), a character they don't have as '?'; a PNG or JPEG in it becomes an image
-    // in the form. What sc::drawing doesn't read (see drawing.h) isn't drawn; a gradient fills with
-    // its middle colour, as the other PDF engines draw it.
+    // An SVG drawing, read by sc-graphics (sc::drawing), written as a form XObject (ISO 32000-1,
+    // 8.10): vectors, so it stays sharp at any size, drawn with content::draw() like any picture.
+    // Its shapes keep their strokes, fills (nonzero or even-odd), clips and transparency (graphics
+    // states); its text is written in PDF's built-in fonts (sc::standard_font::of() the label's
+    // font, else Helvetica of its weight and slant), a character they don't have as '?'; a PNG or
+    // JPEG in it becomes an image in the form. What sc::drawing doesn't read (see drawing.h) isn't
+    // drawn; a gradient fills with its middle colour, as the other PDF engines draw it.
     class svg : public image {
     public:
         // An SVG file; throws std::runtime_error when it can't be read or parsed.

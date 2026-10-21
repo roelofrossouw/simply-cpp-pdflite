@@ -12,11 +12,10 @@
 #include <string_view>
 #include <vector>
 
-// sc-pdflite's file (ISO 32000-1, 7.5): the header, the objects, the cross-reference table and the trailer.
 namespace sc::pdflite {
-    // The file: a header, objects in any order (each written once, by the number allocate() gave
-    // it), and on finish() the cross-reference table and trailer. Objects go to the file as they're
-    // written; nothing is held but their offsets.
+    // The file (ISO 32000-1, 7.5): a header, objects in any order (each written once, by the number
+    // allocate() gave it), and on finish() the cross-reference table and trailer. Objects go to the
+    // file as they're written; nothing is held but their offsets.
     class file {
     public:
         // Throws std::runtime_error when the file can't be created.

@@ -25,14 +25,12 @@
 #include <utility>
 #include <vector>
 
-// sc-pdflite's document: pages, the built-in fonts they use, and the document's information.
 namespace sc::pdflite {
-
     // A PDF document: pages, each of its own size (the document's unless add_page() gives one),
-    // each with a content stream, the built-in fonts they use,
-    // and the document's information. The file is created at once and finished by close(): the
-    // catalog, the page tree, each page with its resources and compressed content, and the
-    // information dictionary. It starts with one page, the current one.
+    // each with a content stream and the fonts, pictures and graphics states it uses; links,
+    // bookmarks and the document's information. The file is created at once and finished by
+    // close(): the catalog, the page tree, each page with its resources and compressed content,
+    // the outline and the information dictionary. It starts with one page, the current one.
     class document {
     public:
         // A size of distances ({sc::dist::mm(210), sc::dist::mm(297)}, or points). Throws std::invalid_argument for a size
@@ -72,7 +70,6 @@ namespace sc::pdflite {
         // static_cast<sc::size_<sc::dist::mm>>(size()) is [210mm,297mm].
         [[nodiscard]] sc::size_<sc::distance> size() const { return {pages_[current_].width, pages_[current_].height}; }
 
-        // The current page's content.
         content &page_content();
 
         // The resource name ("F1") of a built-in font in the current page's resources, adding it
