@@ -8,15 +8,15 @@
 #include <string>
 #include <string_view>
 
-// sc-pdflite's JPEG images (ISO 32000-1, 8.9 and 7.4.8).
 namespace sc::pdflite {
-    // A JPEG image, written into the file as it is (DCTDecode, 7.4.8): nothing is decoded or
-    // recompressed. Copies share the bytes, and a document writes an image once however often it's
-    // drawn. Its header is checked when it's made, throwing std::invalid_argument for what PDF
-    // readers needn't read: a JPEG that isn't baseline or progressive (lossless, hierarchical or
-    // arithmetic-coded), one with 12-bit samples, or one whose height comes later (a DNL marker).
-    // Grey, RGB and CMYK JPEGs are taken; an Adobe CMYK one (its APP14 marker) is written with the
-    // Decode array that undoes Adobe's inversion. An EXIF orientation isn't applied: draw it turned.
+    // A JPEG image (ISO 32000-1, 8.9), written into the file as it is (DCTDecode, 7.4.8): nothing
+    // is decoded or recompressed. Copies share the bytes, and a document writes an image once
+    // however often it's drawn. Its header is checked when it's made, throwing
+    // std::invalid_argument for what PDF readers needn't read: a JPEG that isn't baseline or
+    // progressive (lossless, hierarchical or arithmetic-coded), one with 12-bit samples, or one
+    // whose height comes later (a DNL marker). Grey, RGB and CMYK JPEGs are taken; an Adobe CMYK
+    // one (its APP14 marker) is written with the Decode array that undoes Adobe's inversion. An
+    // EXIF orientation isn't applied: draw it turned.
     class jpeg : public image {
     public:
         // A JPEG file; throws std::runtime_error when it can't be read.

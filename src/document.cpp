@@ -25,8 +25,8 @@ namespace sc::pdflite {
             return path;
         }
 
-        // The page's name for key, or the first time, after write_once() has made sure the file
-        // gets it, prefix and number.
+        // The page's name for key; the first time, write_once() makes sure the file gets the
+        // resource, and the page names it prefix and number.
         template <typename Key, typename WriteOnce>
         std::string page_name(std::map<Key, std::string> &names, const Key &key, WriteOnce &&write_once, const std::string_view prefix,
                               const std::size_t number) {

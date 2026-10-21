@@ -1,9 +1,10 @@
 #ifndef SC_PDFLITE_H
 #define SC_PDFLITE_H
 
-// simply-cpp's own PDF writer: ISO 32000-1 (PDF 1.7), strictly, with no library but zlib. Bare
-// bones so far: pages with content streams (paths, colours, clipping, text) and PDF's built-in
-// fonts. Each part has its header, to include alone:
+// simply-cpp's own PDF writer: ISO 32000-1 (PDF 1.7), strictly, with zlib, FreeType and OpenSSL
+// as its only libraries. Pages with content streams (paths, colours, clipping, transparency,
+// text), PDF's built-in fonts and embedded ones, JPEG, PNG and SVG pictures, links, bookmarks and
+// encryption. Each part has its header, to include alone:
 //   pdflite/object.h    how values are written: numbers, names, strings, dates, references
 //   pdflite/file.h      the file: header, objects, cross-reference table, trailer
 //   pdflite/content.h   a page's content stream, which refuses what PDF forbids

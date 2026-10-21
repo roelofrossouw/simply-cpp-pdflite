@@ -10,7 +10,6 @@
 #include <string_view>
 #include <vector>
 
-// sc-pdflite's content streams (ISO 32000-1, 8 and 9): a page's drawing, operator by operator.
 namespace sc::pdflite {
     // A page's content stream, built operator by operator (ISO 32000-1, 8 and 9). Positions are
     // sc-graphics' canvas's: from the page's top-left corner, y down, as sc::distance (sc::dist::mm,
