@@ -9,7 +9,7 @@ get_sc_version()
 message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
 # sc::distance (distance.h), and points and sizes of distances with in<Unit>() since 1.17.0.
-find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.17.0)
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.20.0)
 # sc::standard_font (the built-in fonts by face since 6.2.0) and paper sizes in millimetres.
 find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 6.2.0)
 # Streams are compressed with zlib; embedded fonts are read by FreeType (as sc-graphics reads them).
@@ -70,4 +70,4 @@ if (sc-image_FOUND AND SC_BUILD_EXAMPLES)
 endif ()
 
 package_sc_module(
-        DEV_DEPENDS "simply-cpp-dev (>= 1.17.0~)" "simply-cpp-graphics-dev (>= 6.2.0~)" zlib1g-dev libfreetype-dev libssl-dev)
+        DEV_DEPENDS "simply-cpp-dev (>= 1.20.0~)" "simply-cpp-graphics-dev (>= 6.2.0~)" zlib1g-dev libfreetype-dev libssl-dev)
