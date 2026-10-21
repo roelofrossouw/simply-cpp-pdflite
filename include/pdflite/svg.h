@@ -34,8 +34,6 @@ namespace sc::pdflite {
 
         [[nodiscard]] const sc::drawing &drawing() const { return *drawing_; }
 
-        [[nodiscard]] std::string_view category() const override { return "XObject"; }
-
         [[nodiscard]] std::string_view prefix() const override { return "Fm"; }
 
         // Writes the form, and the fonts and images it uses as objects of their own.

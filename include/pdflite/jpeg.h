@@ -33,8 +33,6 @@ namespace sc::pdflite {
 
         [[nodiscard]] const std::string &bytes() const { return *bytes_; }
 
-        [[nodiscard]] std::string_view category() const override { return "XObject"; }
-
         [[nodiscard]] std::string_view prefix() const override { return "Im"; }
 
         void write(file &out, std::uint32_t id) const override;

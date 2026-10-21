@@ -13,17 +13,6 @@
 
 namespace sc::pdflite {
     namespace {
-        void trace(content &out, const sc::path &shape) {
-            for (const auto &step: shape.steps()) {
-                switch (step.type) {
-                    case sc::path::kind::move: out.move(step.to.x(), step.to.y()); break;
-                    case sc::path::kind::line: out.line(step.to.x(), step.to.y()); break;
-                    case sc::path::kind::cubic: out.curve(step.first.x(), step.first.y(), step.second.x(), step.second.y(), step.to.x(), step.to.y()); break;
-                    case sc::path::kind::close: out.close_path(); break;
-                }
-            }
-        }
-
         // Text in WinAnsiEncoding, a character it doesn't have as '?'.
         std::string encoded(const std::string &utf8) {
             std::string out;
@@ -66,7 +55,7 @@ namespace sc::pdflite {
 
         void clip_to(content &out, const std::optional<sc::path> &clip) {
             if (!clip) return;
-            trace(out, *clip);
+            out.path(*clip);
             out.clip(); // nonzero, as sc::canvas clips
             out.end_path();
         }
@@ -102,11 +91,8 @@ namespace sc::pdflite {
                     page.stroke_colour(look.stroke().colour().red(), look.stroke().colour().green(), look.stroke().colour().blue());
                     page.line_width(look.stroke().width());
                 }
-                trace(page, sc::to_path(shape->shape));
-                const bool even_odd = look.fill().rule() == sc::fill_rule::even_odd;
-                if (stroked && filled) page.fill_and_stroke(even_odd);
-                else if (filled) page.fill(even_odd);
-                else page.stroke();
+                page.path(sc::to_path(shape->shape));
+                page.paint(filled, stroked, look.fill().rule() == sc::fill_rule::even_odd);
                 page.restore();
             } else if (const auto *text = std::get_if<sc::label>(&item)) {
                 if (!text->fill.visible() || text->text.content.empty()) continue;

@@ -105,20 +105,38 @@ namespace sc::pdflite {
         in_path_ = true;
     }
 
-    void content::paint(const std::string_view line) {
+    void content::path(const sc::path &shape) {
+        for (const auto &step: shape.steps()) {
+            switch (step.type) {
+                case sc::path::kind::move: move(step.to.x(), step.to.y()); break;
+                case sc::path::kind::line: line(step.to.x(), step.to.y()); break;
+                case sc::path::kind::cubic: curve(step.first.x(), step.first.y(), step.second.x(), step.second.y(), step.to.x(), step.to.y()); break;
+                case sc::path::kind::close: close_path(); break;
+            }
+        }
+    }
+
+    void content::finish_path(const std::string_view line) {
         if (!in_path_) throw std::logic_error("sc::pdflite: " + std::string{line} + " without a path to paint");
         op(line);
         in_path_ = false;
         clipping_ = false;
     }
 
-    void content::fill(const bool even_odd) { paint(even_odd ? "f*" : "f"); }
+    void content::fill(const bool even_odd) { finish_path(even_odd ? "f*" : "f"); }
 
-    void content::stroke() { paint("S"); }
+    void content::stroke() { finish_path("S"); }
 
-    void content::fill_and_stroke(const bool even_odd) { paint(even_odd ? "B*" : "B"); }
+    void content::fill_and_stroke(const bool even_odd) { finish_path(even_odd ? "B*" : "B"); }
 
-    void content::end_path() { paint("n"); }
+    void content::end_path() { finish_path("n"); }
+
+    void content::paint(const bool filled, const bool stroked, const bool even_odd) {
+        if (filled && stroked) fill_and_stroke(even_odd);
+        else if (filled) fill(even_odd);
+        else if (stroked) stroke();
+        else end_path();
+    }
 
     void content::clip(const bool even_odd) {
         if (!in_path_) throw std::logic_error("sc::pdflite: W without a path");

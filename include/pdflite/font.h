@@ -57,8 +57,6 @@ namespace sc::pdflite {
 
         [[nodiscard]] sc::distance x_height(sc::distance size) const;
 
-        [[nodiscard]] std::string_view category() const override { return "Font"; }
-
         [[nodiscard]] std::string_view prefix() const override { return "F"; }
 
         // The Type0 font as object id, and its descendant, descriptor, subset and ToUnicode map.
