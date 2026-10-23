@@ -25,7 +25,11 @@ namespace sc::pdflite {
                const std::optional<protection> &protect = std::nullopt);
 
     // The same for files, each read as reader reads it without a password (so a file that needs
-    // one to be opened throws std::runtime_error).
+    // one to be opened throws std::runtime_error). A JPEG or PNG among them (known by its first
+    // bytes, not its name) becomes a page of its own, the size of the page before it (of the next
+    // file's first page when it comes first; A4 without any PDF): turned upright as its EXIF
+    // orientation says, scaled to fit keeping its proportions, and centred. A file that's neither
+    // throws std::runtime_error naming it.
     void merge(const std::vector<std::filesystem::path> &inputs, const std::filesystem::path &output,
                const std::optional<protection> &protect = std::nullopt);
 

@@ -17,7 +17,8 @@ set_tests_properties(test-pdflite PROPERTIES
         FIXTURES_SETUP pdflite_files)
 # The reader, merge() and protect(), on pdflite's own files and on others' (resource/pdf).
 add_sc_test(reader LABELS unit)
-target_compile_definitions(test-reader PRIVATE SC_PDFLITE_TEST_PDFS="${CMAKE_CURRENT_SOURCE_DIR}/resource/pdf")
+target_compile_definitions(test-reader PRIVATE SC_PDFLITE_TEST_PDFS="${CMAKE_CURRENT_SOURCE_DIR}/resource/pdf"
+        SC_PDFLITE_TEST_PICTURES="${CMAKE_CURRENT_SOURCE_DIR}/resource/picture")
 set_tests_properties(test-reader PROPERTIES
         ENVIRONMENT "SC_PDFLITE_OUTPUT=${pdflite_output}"
         FIXTURES_SETUP pdflite_files)
