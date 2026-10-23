@@ -28,6 +28,7 @@ namespace {
     }
 
     const fs::path fixtures{SC_PDFLITE_TEST_PDFS};
+    const fs::path pictures{SC_PDFLITE_TEST_PICTURES};
 
     std::string read(const fs::path &path) {
         std::ifstream in{path, std::ios::binary};
@@ -432,6 +433,59 @@ int main() {
         CHECK_THROWS_AS(decorate(reader{report}, empty, out / "reader-never.pdf"), std::invalid_argument);
         CHECK_THROWS_AS(merge(std::vector<fs::path>{}, out / "reader-never.pdf"), std::invalid_argument);
         CHECK(!fs::exists(out / "reader-never.pdf"));
+    }
+
+    SECTION("merge() with pictures: a JPEG or PNG a page the size of the page before it, upright, fitted, centred");
+    {
+        auto media_box = [](const reader &pdf, const std::size_t page) {
+            const auto box = pdf.resolve(pdf.page(page).at("MediaBox")).as<array>();
+            auto n = [&](const std::size_t i) { return box[i].is<double>() ? box[i].as<double>() : static_cast<double>(box[i].as<std::int64_t>()); };
+            return std::pair{n(2) - n(0), n(3) - n(1)};
+        };
+        // After an A5 file: A5 pages. (own() writes A5: 419.53 x 595.28 points.)
+        const auto report = own(out / "reader-pictures-report.pdf", "Theta");
+        const auto merged = out / "reader-pictures.pdf";
+        merge({report, pictures / "exif-1.jpg", pictures / "exif-6.jpg", pictures / "tall.png"}, merged);
+        const reader pdf{merged};
+        CHECK_EQ(pdf.page_count(), std::size_t{6});
+        const auto a5 = media_box(pdf, 0);
+        bool same_size = true;
+        for (std::size_t page = 3; page < 6; ++page) same_size = same_size && media_box(pdf, page) == a5;
+        CHECK(same_size);
+        // Upright: orientation 1 is drawn as it is; 6 turned a quarter (cm's a is 0).
+        const string upright_page = page_text(pdf, 3), turned_page = page_text(pdf, 4);
+        CHECK(upright_page.starts_with("q\n419.5276 0 0 279.6851 0 157.7953 cm")); // the page's width, centred: 60 x 40 to 419.5 x 279.7
+        CHECK(turned_page.starts_with("q\n0 "));                                   // a quarter turn: cm's a is 0
+        CHECK(turned_page.find(" Do") != string::npos);
+        CHECK_EQ(title(pdf), string{"Theta"}); // still the report's information
+
+        // A picture first: the next file's size; no PDF at all: A4.
+        const auto first = out / "reader-picture-first.pdf";
+        merge({pictures / "tall.png", fixtures / "quartz.pdf"}, first);
+        const reader starts{first};
+        const auto quartz = media_box(reader{fixtures / "quartz.pdf"}, 0);
+        CHECK((media_box(starts, 0) == quartz));
+        const auto only = out / "reader-pictures-only.pdf";
+        merge({pictures / "exif-1.jpg", pictures / "tall.png"}, only);
+        const auto a4 = media_box(reader{only}, 0);
+        CHECK(std::abs(a4.first - 595.2756) < 0.01 && std::abs(a4.second - 841.8898) < 0.01);
+
+        // Neither a PDF nor a picture sc reads: the error names the file.
+        const auto text = out / "reader-not-a-picture.txt";
+        std::ofstream{text} << "just text";
+        try {
+            merge({report, text}, out / "reader-never.pdf");
+            CHECK(false);
+        } catch (const std::runtime_error &error) {
+            CHECK(string{error.what()}.find("reader-not-a-picture.txt") != string::npos);
+        }
+        CHECK(!fs::exists(out / "reader-never.pdf"));
+        fs::remove(text);
+        // Nothing left behind in the temporary folder.
+        bool leftovers = false;
+        for (const auto &entry: fs::directory_iterator{fs::temp_directory_path()})
+            leftovers = leftovers || entry.path().filename().string().starts_with("sc-pdflite-picture-");
+        CHECK(!leftovers);
     }
 
     TEST_SUMMARY();

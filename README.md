@@ -71,6 +71,12 @@ And what it reads (since 4.3.0):
   annotations, links to pages of its own file); the first file's title, bookmarks and named
   destinations come too. Streams are copied as they're encoded, so nothing is decompressed and
   compressed again.
+- **Pictures as pages** (since 4.4.0): a JPEG or PNG among `merge()`'s files (known by its first
+  bytes, not its name) becomes a page the size of the page before it (of the next file's first
+  page when it comes first; A4 without any PDF), turned upright as its EXIF orientation says (a
+  phone photo comes out the right way up), scaled to fit keeping its proportions, and centred. Its
+  data goes in as it is (a JPEG isn't recompressed). Other formats (GIF, TIFF, HEIC ...) aren't
+  read yet: convert them first.
 - **Passwords for an existing file** (`sc::pdflite::protect()`, or `merge()` with a
   `protection`): AES-256, whatever the input had.
 - **Backgrounds and stamps** (`sc::pdflite::decorate()`): another PDF's pages drawn behind a file's
@@ -548,23 +554,26 @@ another PDF's pages behind (`--background`) or over them (`--stamp`) and passwor
 
 <!-- sc-example: examples/sc-pdflite-merge.cpp -->
 ```cpp
-std::vector<sc::pdflite::reader> inputs;
-for (const auto &file: args["inputs"]) {
-    inputs.emplace_back(file.get<std::string>(), args.as<std::string>("password"));
-    std::cout << file.get<std::string>() << ": " << inputs.back().page_count() << " pages"
-              << (inputs.back().encrypted() ? " (encrypted)" : "") << '\n';
-}
+std::vector<std::filesystem::path> files;
+for (const auto &file: args["inputs"]) files.emplace_back(file.get<std::string>());
 std::optional<sc::pdflite::protection> protection;
 const auto user = args.as<std::string>("user-password"), owner = args.as<std::string>("owner-password");
 if (!user.empty() || !owner.empty()) protection = sc::pdflite::protection{user, owner};
 const std::filesystem::path output = args.as<std::string>("output");
-const std::vector<std::reference_wrapper<const sc::pdflite::reader>> files(inputs.begin(), inputs.end());
+// The files merged, pictures made pages; or, with a password, each PDF opened with it.
+auto merge = [&](const std::optional<sc::pdflite::protection> &with) {
+    const auto password = args.as<std::string>("password");
+    if (password.empty()) return sc::pdflite::merge(files, output, with);
+    std::vector<sc::pdflite::reader> opened;
+    for (const auto &file: files) opened.emplace_back(file, password);
+    sc::pdflite::merge(std::vector<std::reference_wrapper<const sc::pdflite::reader>>(opened.begin(), opened.end()), output, with);
+};
 const auto background = args.as<std::string>("background"), stamp = args.as<std::string>("stamp");
 if (background.empty() && stamp.empty()) {
-    sc::pdflite::merge(files, output, protection);
+    merge(protection);
 } else {
     // Merged first, then decorated in place: the passwords go on last.
-    sc::pdflite::merge(files, output);
+    merge(std::nullopt);
     if (!background.empty())
         sc::pdflite::decorate(output, background, output, sc::pdflite::layer::behind, stamp.empty() ? protection : std::nullopt);
     if (!stamp.empty()) sc::pdflite::decorate(output, stamp, output, sc::pdflite::layer::over, protection);
@@ -578,6 +587,7 @@ Files on disk merge in one call, and a file gets passwords with another:
 
 ```cpp
 sc::pdflite::merge({"report.pdf", "appendix.pdf"}, "report.pdf");          // into the first one
+sc::pdflite::merge({"report.pdf", "photo.jpg", "scan.png"}, "report.pdf");  // pictures as pages
 sc::pdflite::protect("report.pdf", "report.pdf", {"", "owner"});            // print only, for anyone
 sc::pdflite::decorate("report.pdf", "letterhead.pdf", "report.pdf");       // its page behind every page
 sc::pdflite::decorate("report.pdf", "copy.pdf", "report.pdf", sc::pdflite::layer::over); // a stamp

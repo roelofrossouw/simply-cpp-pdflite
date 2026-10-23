@@ -1,11 +1,16 @@
 #include "pdflite/merge.h"
 
+#include "pdflite/document.h"
 #include "pdflite/file.h"
+#include "pdflite/jpeg.h"
+#include "pdflite/png.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <fstream>
 #include <functional>
+#include <random>
 #include <map>
 #include <memory>
 #include <set>
@@ -390,6 +395,124 @@ namespace sc::pdflite {
         }
     }
 
+    namespace {
+        // ---- Pictures as pages ----
+
+        enum class picture { none, jpeg, png };
+
+        // A JPEG or PNG, by its first bytes (not its name).
+        picture picture_in(const std::filesystem::path &file) {
+            std::ifstream in{file, std::ios::binary};
+            char head[8] = {};
+            in.read(head, sizeof head);
+            const std::string_view bytes{head, static_cast<std::size_t>(in.gcount())};
+            if (bytes.starts_with("\xFF\xD8\xFF")) return picture::jpeg;
+            if (bytes.starts_with("\x89PNG\r\n\x1A\n")) return picture::png;
+            return picture::none;
+        }
+
+        // A JPEG's EXIF orientation (1 to 8; 1, upright, when it has none): how the camera stored it.
+        int exif_orientation(const std::string &jpeg) {
+            auto u16 = [&](const std::size_t at, const bool little) {
+                const auto b0 = static_cast<unsigned char>(jpeg[at]), b1 = static_cast<unsigned char>(jpeg[at + 1]);
+                return little ? b0 | b1 << 8 : b0 << 8 | b1;
+            };
+            auto u32 = [&](const std::size_t at, const bool little) {
+                return little ? static_cast<std::uint32_t>(u16(at, true)) | static_cast<std::uint32_t>(u16(at + 2, true)) << 16
+                              : static_cast<std::uint32_t>(u16(at, false)) << 16 | static_cast<std::uint32_t>(u16(at + 2, false));
+            };
+            // The segments before the image data: APP1 "Exif\0\0" holds a TIFF header and IFD0.
+            for (std::size_t at = 2; at + 4 <= jpeg.size();) {
+                if (static_cast<unsigned char>(jpeg[at]) != 0xFF) break;
+                const auto marker = static_cast<unsigned char>(jpeg[at + 1]);
+                if (marker == 0xDA || marker == 0xD9) break; // the image data: no more segments
+                const std::size_t length = u16(at + 2, false);
+                if (length < 2 || at + 2 + length > jpeg.size()) break;
+                if (marker == 0xE1 && length >= 8 && jpeg.compare(at + 4, 6, std::string{"Exif\0\0", 6}) == 0) {
+                    const std::size_t tiff = at + 10, end = at + 2 + length;
+                    if (tiff + 8 > end) break;
+                    const bool little = jpeg.compare(tiff, 2, "II") == 0;
+                    if (!little && jpeg.compare(tiff, 2, "MM") != 0) break;
+                    const std::size_t ifd = tiff + u32(tiff + 4, little);
+                    if (ifd + 2 > end) break;
+                    const auto entries = u16(ifd, little);
+                    for (std::size_t i = 0; i < entries; ++i) {
+                        const std::size_t entry = ifd + 2 + i * 12;
+                        if (entry + 12 > end) break;
+                        if (u16(entry, little) == 0x0112) {
+                            const int value = u16(entry + 8, little);
+                            return value >= 1 && value <= 8 ? value : 1;
+                        }
+                    }
+                    break;
+                }
+                at += 2 + length;
+            }
+            return 1;
+        }
+
+        // From the picture's unit square (as it's stored) to it turned upright as its EXIF
+        // orientation asks, w by h pixels stored; y down. Orientations 5 to 8 turn it a quarter.
+        sc::transform upright(const int orientation, const double w, const double h) {
+            switch (orientation) {
+                case 2: return {-w, 0, 0, h, w, 0};  // mirrored left to right
+                case 3: return {-w, 0, 0, -h, w, h}; // turned half round
+                case 4: return {w, 0, 0, -h, 0, h};  // mirrored top to bottom
+                case 5: return {0, w, h, 0, 0, 0};   // mirrored across the diagonal
+                case 6: return {0, w, -h, 0, h, 0};  // turned a quarter clockwise to be upright
+                case 7: return {0, -w, -h, 0, h, w}; // mirrored across the other diagonal
+                case 8: return {0, -w, h, 0, 0, w};  // turned a quarter anticlockwise
+                default: return {w, 0, 0, h, 0, 0};
+            }
+        }
+
+        // A one-page PDF, written to a temporary file, of the picture on a page of size (points):
+        // turned upright, scaled to fit keeping its proportions, and centred.
+        std::filesystem::path picture_page(const std::filesystem::path &file, const picture kind, const double width, const double height) {
+            std::random_device random;
+            const auto out = std::filesystem::temp_directory_path() / ("sc-pdflite-picture-" + std::to_string(random()) + std::to_string(random()) + ".pdf");
+            std::unique_ptr<image> drawn;
+            int orientation = 1;
+            if (kind == picture::jpeg) {
+                std::ifstream in{file, std::ios::binary};
+                std::string bytes{std::istreambuf_iterator<char>{in}, {}};
+                orientation = exif_orientation(bytes);
+                drawn = std::make_unique<jpeg>(std::move(bytes));
+            } else {
+                drawn = std::make_unique<png>(png::load(file));
+            }
+            const auto pixels = drawn->size();
+            const double w = pixels.width(), h = pixels.height();
+            if (w <= 0 || h <= 0) throw std::runtime_error("sc::pdflite: " + file.string() + " is a picture of no size");
+            const bool quarter = orientation >= 5;
+            const double shown_w = quarter ? h : w, shown_h = quarter ? w : h;
+            const double scale = std::min(width / shown_w, height / shown_h);
+            const auto placement = upright(orientation, w, h)
+                                       .then(sc::transform::scale(scale))
+                                       .then(sc::transform::translate((width - scale * shown_w) / 2, (height - scale * shown_h) / 2));
+            document pdf{out, sc::size_<sc::distance>{width, height}};
+            const auto name = pdf.image(*drawn);
+            pdf.page_content().draw(name, placement);
+            pdf.close();
+            return out;
+        }
+
+        // The size a page is shown at (its crop box, turned as /Rotate turns it), in points.
+        std::pair<double, double> shown_size(const reader &in, const std::size_t page) {
+            const auto frame = frame_of(in, in.page(page));
+            return {frame.shown_width(), frame.shown_height()};
+        }
+
+        // Temporary files, removed when it goes, however it goes.
+        struct temporaries {
+            std::vector<std::filesystem::path> files;
+            ~temporaries() {
+                std::error_code ignored;
+                for (const auto &file: files) std::filesystem::remove(file, ignored);
+            }
+        };
+    }
+
     void merge(const std::vector<std::reference_wrapper<const reader>> &inputs, const std::filesystem::path &output,
                const std::optional<protection> &protect) {
         write_file(output, protect, [&](file &out, const std::uint32_t tree, array &kids, dictionary &catalog, std::uint32_t &info) {
@@ -407,10 +530,37 @@ namespace sc::pdflite {
     }
 
     void merge(const std::vector<std::filesystem::path> &inputs, const std::filesystem::path &output, const std::optional<protection> &protect) {
-        std::vector<reader> read;
-        read.reserve(inputs.size());
-        for (const auto &path: inputs) read.emplace_back(path);
-        std::vector<std::reference_wrapper<const reader>> refs(read.begin(), read.end());
+        // PDFs read first; each picture then becomes a page the size of the page before it (the
+        // first page after it, when it comes first; A4 when there's no PDF at all).
+        std::vector<std::optional<reader>> read(inputs.size());
+        std::vector<picture> kinds(inputs.size(), picture::none);
+        for (std::size_t i = 0; i < inputs.size(); ++i) {
+            kinds[i] = picture_in(inputs[i]);
+            if (kinds[i] != picture::none) continue;
+            try {
+                read[i].emplace(inputs[i]);
+            } catch (const std::runtime_error &error) {
+                throw std::runtime_error(inputs[i].string() + ": " + error.what());
+            }
+        }
+        temporaries made;
+        for (std::size_t i = 0; i < inputs.size(); ++i) {
+            if (kinds[i] == picture::none) continue;
+            std::pair<double, double> size{595.2756, 841.8898}; // A4
+            bool found = false;
+            for (std::size_t j = i; j-- > 0 && !found;)
+                if (read[j] && read[j]->page_count() > 0) size = shown_size(*read[j], read[j]->page_count() - 1), found = true;
+            for (std::size_t j = i + 1; j < inputs.size() && !found; ++j)
+                if (read[j] && read[j]->page_count() > 0) size = shown_size(*read[j], 0), found = true;
+            try {
+                made.files.push_back(picture_page(inputs[i], kinds[i], size.first, size.second));
+                read[i].emplace(made.files.back());
+            } catch (const std::exception &error) {
+                throw std::runtime_error(inputs[i].string() + ": " + error.what());
+            }
+        }
+        std::vector<std::reference_wrapper<const reader>> refs;
+        for (const auto &each: read) refs.emplace_back(*each);
         merge(refs, output, protect);
     }
 
