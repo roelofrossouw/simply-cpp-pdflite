@@ -16,8 +16,10 @@
 // out of it (pdflite/merge.h). It reads well-formed files: cross-reference tables and streams,
 // object streams, incremental updates (the newest object wins), FlateDecode (with its
 // predictors), and files encrypted by the standard security handler (RC4 and AES-128, revisions 2
-// to 4; AES-256, revision 6). A file whose cross-reference doesn't lead to its objects isn't
-// repaired: that throws.
+// to 4; AES-256, revision 6). A damaged file is repaired as it's read, as qpdf and MuPDF repair
+// one: when its cross-reference doesn't lead to its objects, it's rebuilt by scanning the file
+// for them (repaired() says so), and when its page tree can't be read, its pages are taken in the
+// order they're in the file.
 namespace sc::pdflite {
     // A stream as the file holds it: its dictionary and its data, decrypted but still encoded by
     // its filters (/Filter), so it can be written again as it is.
@@ -30,8 +32,9 @@ namespace sc::pdflite {
     public:
         // Reads a file, and opens it with password (the user's or the owner's) when it's encrypted;
         // an empty password opens a file that needs none to be read (an owner password only).
-        // Throws std::runtime_error when it can't be read, isn't a PDF, its structure is damaged, it
-        // uses a security handler other than the standard one, or the password doesn't open it.
+        // Throws std::runtime_error when it can't be read, isn't a PDF, is damaged beyond repair (no
+        // catalog or pages can be found), uses a security handler other than the standard one, or
+        // the password doesn't open it.
         explicit reader(const std::filesystem::path &file, std::string_view password = {});
 
         // The same, from a PDF in memory.
@@ -42,6 +45,11 @@ namespace sc::pdflite {
 
         // Whether it was encrypted (what's read from it is decrypted).
         [[nodiscard]] bool encrypted() const;
+
+        // Whether its cross-reference had to be rebuilt, by scanning the file for its objects, as
+        // a damaged file's is (where it was cut short, offsets that don't lead to their objects, a
+        // table that can't be read).
+        [[nodiscard]] bool repaired() const;
 
         // Object id's value, a stream's dictionary for a stream; null for one that's free or not in
         // the file (7.3.10: a reference to it is a reference to null). Throws std::runtime_error when

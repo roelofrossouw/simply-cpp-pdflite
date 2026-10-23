@@ -533,6 +533,12 @@ namespace sc::pdflite {
         mutable std::unordered_map<std::uint32_t, std::string> object_stream_data;
         mutable std::set<std::uint32_t> reading; // objects being read: a /Length that refers back to its own stream
 
+        // Repair (stage 3): the cross-reference rebuilt by scanning the file for its objects.
+        bool repaired = false;
+        bool rebuilding = false;
+        std::unordered_map<std::uint32_t, std::size_t> position; // where each object was found (an object stream's, for one in it)
+        std::vector<std::pair<std::uint32_t, std::size_t>> object_streams; // the object streams found, and where
+
         // The entries already set by a newer section win (7.5.6); this marks them.
         std::vector<bool> seen;
 
@@ -547,11 +553,14 @@ namespace sc::pdflite {
             seen[id] = true;
         }
 
-        void read_structure() {
+        void read_header() {
             // The header (7.5.2), anywhere in the first kilobyte: offsets count from it.
             const auto header = std::string_view{bytes}.substr(0, 1024).find("%PDF-");
             if (header == std::string_view::npos) damaged("not a PDF (no %PDF- header)");
             base = header;
+        }
+
+        void read_structure() {
             // startxref, in the last kilobyte or so (7.5.5).
             const std::size_t tail = bytes.size() > 2048 ? bytes.size() - 2048 : 0;
             const auto keyword = std::string_view{bytes}.rfind("startxref");
@@ -617,7 +626,7 @@ namespace sc::pdflite {
 
         // A cross-reference stream (7.5.8): its entries noted, its dictionary returned.
         dictionary read_stream_section(const std::uint64_t offset) {
-            const auto [unused, value, data] = indirect_at(base + offset, 0, false);
+            const auto [unused, value, data, end] = indirect_at(base + offset, 0, false);
             if (!value.is<dictionary>() || !data) damaged("a cross-reference offset that leads to neither a table nor a stream");
             const auto &entries = value.as<dictionary>();
             const auto *type = entries.find("Type");
@@ -679,6 +688,7 @@ namespace sc::pdflite {
             std::uint32_t id;
             object value;
             std::optional<std::string> stream_data; // raw, as in the file
+            std::size_t end = 0;                    // just after it (its endstream or the object)
         };
 
         // The indirect object at a position: "12 0 obj ... endobj", a stream's data with it.
@@ -704,7 +714,7 @@ namespace sc::pdflite {
                 std::optional<std::uint64_t> size;
                 if (length && length->is<std::int64_t>() && length->as<std::int64_t>() >= 0) {
                     size = static_cast<std::uint64_t>(length->as<std::int64_t>());
-                } else if (length && length->is<reference>() && !reading.contains(length->as<reference>().id)) {
+                } else if (length && length->is<reference>() && !rebuilding && !reading.contains(length->as<reference>().id)) {
                     if (const object resolved = get(length->as<reference>().id); resolved.is<std::int64_t>() && resolved.as<std::int64_t>() >= 0)
                         size = static_cast<std::uint64_t>(resolved.as<std::int64_t>());
                 }
@@ -723,7 +733,11 @@ namespace sc::pdflite {
                     size = stop - start;
                 }
                 data = bytes.substr(start, *size);
+                p.seek(static_cast<std::size_t>(start + *size));
+                p.take("endstream");
             }
+            p.take("endobj");
+            const std::size_t end = p.position();
             if (decrypting && security && *id != security->encrypt_id) {
                 const auto gen = static_cast<std::uint32_t>(*generation);
                 value = decrypted(value, static_cast<std::uint32_t>(*id), gen);
@@ -735,7 +749,7 @@ namespace sc::pdflite {
                         data = security->decrypt(*data, security->streams, static_cast<std::uint32_t>(*id), gen);
                 }
             }
-            return {static_cast<std::uint32_t>(*id), std::move(value), std::move(data)};
+            return {static_cast<std::uint32_t>(*id), std::move(value), std::move(data), end};
         }
 
         object decrypted(const object &value, const std::uint32_t id, const std::uint32_t generation) const {
@@ -756,6 +770,20 @@ namespace sc::pdflite {
 
         object get(const std::uint32_t id) const {
             if (const auto found = objects.find(id); found != objects.end()) return found->second;
+            try {
+                return read_object(id);
+            } catch (const std::runtime_error &) {
+                // The cross-reference didn't lead to it: rebuilt once, and tried again.
+                if (repaired || rebuilding) throw;
+                auto &self = const_cast<impl &>(*this);
+                self.rebuild();
+                self.register_object_streams();
+                if (const auto found = objects.find(id); found != objects.end()) return found->second;
+                return read_object(id);
+            }
+        }
+
+        object read_object(const std::uint32_t id) const {
             if (id >= table.size() || table[id].type == entry::kind::free) return nullptr;
             if (reading.contains(id)) damaged("object " + std::to_string(id) + " refers back to itself while being read");
             reading.insert(id);
@@ -834,6 +862,152 @@ namespace sc::pdflite {
             return out;
         }
 
+        // ---- Repair: the cross-reference rebuilt by scanning the file (as qpdf and MuPDF do) ----
+
+        // Every "N G obj" in the file, in order (a later one wins: incremental updates are
+        // appended), and every trailer and cross-reference stream's dictionary merged, the later
+        // ones' entries winning. Objects in object streams are added by register_object_streams(),
+        // once the file can be decrypted.
+        void rebuild() {
+            rebuilding = true;
+            repaired = true;
+            struct done {
+                bool &flag;
+                ~done() { flag = false; }
+            } finally{rebuilding};
+            table.clear();
+            seen.clear();
+            objects.clear();
+            streams.clear();
+            object_stream_offsets.clear();
+            object_stream_data.clear();
+            position.clear();
+            object_streams.clear();
+            std::vector<std::pair<std::size_t, dictionary>> trailers; // where, and what
+            std::uint32_t security_handler = 0;                        // an /Encrypt dictionary found, when the trailer naming it is lost
+            const std::string_view all{bytes};
+            std::size_t at = base;
+            while ((at = all.find("obj", at)) != std::string_view::npos) {
+                const std::size_t keyword = at;
+                at += 3;
+                if (keyword + 3 < all.size() && is_regular(all[keyword + 3])) continue; // "objects", "obj2"
+                // Back over "N G ": a generation, then a number, each after white space.
+                std::size_t i = keyword;
+                auto back_over_white = [&] {
+                    std::size_t n = 0;
+                    while (i > base && is_white(all[i - 1])) --i, ++n;
+                    return n;
+                };
+                auto back_over_digits = [&] {
+                    const std::size_t stop = i;
+                    while (i > base && all[i - 1] >= '0' && all[i - 1] <= '9') --i;
+                    return stop - i;
+                };
+                if (back_over_white() == 0 || back_over_digits() == 0 || back_over_white() == 0 || back_over_digits() == 0) continue;
+                if (i > base && is_regular(all[i - 1])) continue;
+                const std::size_t start = i;
+                try {
+                    auto read = indirect_at(start, 0, false);
+                    if (read.id == 0 || read.id > 10'000'000) continue;
+                    if (read.id >= table.size()) table.resize(read.id + 1);
+                    entry e;
+                    e.type = entry::kind::at;
+                    e.offset = start - base;
+                    parser header{bytes, start};
+                    header.unsigned_integer();
+                    e.generation = static_cast<std::uint32_t>(header.unsigned_integer().value_or(0));
+                    table[read.id] = e;
+                    position[read.id] = start;
+                    if (read.stream_data && read.value.is<dictionary>()) {
+                        const auto *type = read.value.as<dictionary>().find("Type");
+                        const std::string kind = type && type->is<name>() ? type->as<name>().text() : "";
+                        if (kind == "ObjStm") object_streams.emplace_back(read.id, start);
+                        if (kind == "XRef") trailers.emplace_back(start, read.value.as<dictionary>());
+                    }
+                    if (read.value.is<dictionary>()) {
+                        const auto &entries = read.value.as<dictionary>();
+                        const auto *filter = entries.find("Filter");
+                        if (filter && filter->is<name>() && filter->as<name>().text() == "Standard" && entries.contains("O") && entries.contains("U"))
+                            security_handler = read.id;
+                    }
+                    at = std::max(at, read.end); // past its stream: "obj" in data isn't an object
+                } catch (const std::runtime_error &) {
+                    // Not an object after all, or a damaged one: passed over.
+                }
+            }
+            std::size_t t = base;
+            while ((t = all.find("trailer", t)) != std::string_view::npos) {
+                parser p{bytes, t + 7};
+                try {
+                    if (const object value = p.value(); value.is<dictionary>()) trailers.emplace_back(t, value.as<dictionary>());
+                } catch (const std::runtime_error &) {
+                }
+                t += 7;
+            }
+            std::ranges::sort(trailers, {}, &std::pair<std::size_t, dictionary>::first);
+            dictionary merged;
+            for (const auto &[where, entries]: trailers)
+                for (const auto &[key, value]: entries) {
+                    const auto &k = key.text();
+                    if (k == "Root" || k == "Info" || k == "Encrypt" || k == "ID") merged.set(k, value);
+                }
+            // An encrypted file whose trailer is lost: its /Encrypt dictionary found by what's in it.
+            if (!merged.contains("Encrypt") && security_handler != 0) merged.set("Encrypt", reference{security_handler});
+            trailer_entries = std::move(merged);
+            if (table.empty()) damaged("no objects found: not a PDF, or nothing of it is left");
+        }
+
+        // The objects kept in the object streams found by rebuild(), where no later object of the
+        // same number was found. Run once the file can be decrypted.
+        void register_object_streams() {
+            if (!repaired) return;
+            for (const auto &[container, where]: object_streams) {
+                try {
+                    get(container);
+                    const auto found = streams.find(container);
+                    if (found == streams.end()) continue;
+                    const std::string data = decode(found->second.entries, found->second.data);
+                    const int count = integer_in(found->second.entries, "N", -1);
+                    parser p{data, 0};
+                    for (int i = 0; i < count; ++i) {
+                        const auto number = p.unsigned_integer();
+                        const auto offset = p.unsigned_integer();
+                        if (!number || !offset || *number == 0 || *number > 10'000'000) break;
+                        const auto id = static_cast<std::uint32_t>(*number);
+                        if (const auto known = position.find(id); known != position.end() && known->second > where) continue;
+                        if (id >= table.size()) table.resize(id + 1);
+                        table[id] = entry{entry::kind::compressed, container, static_cast<std::uint32_t>(i)};
+                        position[id] = where;
+                        objects.erase(id);
+                    }
+                } catch (const std::runtime_error &) {
+                    // An object stream that can't be read: its objects stay missing.
+                }
+            }
+        }
+
+        // The objects (by number) whose value is a dictionary of this /Type, in the order they're in
+        // the file.
+        std::vector<std::uint32_t> objects_of_type(const std::string_view type) const {
+            std::vector<std::pair<std::size_t, std::uint32_t>> found;
+            for (std::uint32_t id = 1; id < table.size(); ++id) {
+                if (table[id].type == entry::kind::free) continue;
+                try {
+                    const object value = get(id);
+                    const auto *kind = value.is<dictionary>() ? value.as<dictionary>().find("Type") : nullptr;
+                    if (kind && kind->is<name>() && kind->as<name>().text() == type) {
+                        const auto where = position.find(id);
+                        found.emplace_back(where == position.end() ? 0 : where->second, id);
+                    }
+                } catch (const std::runtime_error &) {
+                }
+            }
+            std::ranges::sort(found);
+            std::vector<std::uint32_t> out;
+            for (const auto &[where, id]: found) out.push_back(id);
+            return out;
+        }
+
         void read_security(const std::string_view password) {
             const auto *encrypt_entry = trailer_entries.find("Encrypt");
             if (!encrypt_entry) return;
@@ -877,6 +1051,9 @@ namespace sc::pdflite {
                         break;
                     }
                 }
+                if (!key && first_id.empty())
+                    damaged("the file's identifier (the trailer's /ID) is lost, and a file encrypted with RC4 or AES-128 can't be "
+                            "decrypted without it");
                 if (!key) damaged("the password doesn't open this file");
                 s.key = std::move(*key);
                 s.strings = crypt_method(encrypt, "StrF", version);
@@ -891,12 +1068,61 @@ namespace sc::pdflite {
 
         // The page tree (7.7.3), what each page inherits carried down.
         void read_pages() {
-            const object root = resolve(trailer_entries.at("Root"));
-            if (!root.is<dictionary>()) damaged("the catalog isn't a dictionary");
-            const auto *pages = root.as<dictionary>().find("Pages");
-            if (!pages || !pages->is<reference>()) damaged("the catalog has no page tree");
-            std::set<std::uint32_t> visited;
-            walk(pages->as<reference>().id, {}, visited, 0);
+            // The page tree as the catalog has it. A tree that can't be read, or holds no pages though
+            // it says it has some, is read again from a rebuilt cross-reference; failing that, the
+            // file's pages are taken in the order they're in it.
+            bool read = false;
+            try {
+                if (!trailer_entries.contains("Root") && repaired) {
+                    if (const auto catalogs = objects_of_type("Catalog"); !catalogs.empty())
+                        trailer_entries.set("Root", reference{catalogs.back()});
+                }
+                if (!trailer_entries.contains("Root")) damaged("no catalog (/Root)");
+                const object root = resolve(trailer_entries.at("Root"));
+                if (!root.is<dictionary>()) damaged("the catalog isn't a dictionary");
+                const auto *pages = root.as<dictionary>().find("Pages");
+                if (!pages || !pages->is<reference>()) damaged("the catalog has no page tree");
+                std::set<std::uint32_t> visited;
+                walk(pages->as<reference>().id, {}, visited, 0);
+                const object tree = get(pages->as<reference>().id);
+                const auto *count = tree.is<dictionary>() ? tree.as<dictionary>().find("Count") : nullptr;
+                read = !page_ids.empty() || (count && count->is<std::int64_t>() && count->as<std::int64_t>() == 0);
+            } catch (const std::runtime_error &) {
+                if (!repaired) {
+                    page_ids.clear();
+                    inherited.clear();
+                    rebuild();
+                    register_object_streams();
+                    return read_pages();
+                }
+            }
+            if (read) return;
+            if (!repaired) {
+                page_ids.clear();
+                inherited.clear();
+                rebuild();
+                register_object_streams();
+                return read_pages();
+            }
+            page_ids.clear();
+            inherited.clear();
+            for (const auto id: objects_of_type("Page")) {
+                // What it inherits, from its /Parent chain (the nearest wins).
+                dictionary inherits;
+                std::set<std::uint32_t> visited{id};
+                object node = get(id);
+                while (node.is<dictionary>()) {
+                    const auto *parent = node.as<dictionary>().find("Parent");
+                    if (!parent || !parent->is<reference>() || !visited.insert(parent->as<reference>().id).second) break;
+                    node = get(parent->as<reference>().id);
+                    if (!node.is<dictionary>()) break;
+                    for (const auto key: {"Resources", "MediaBox", "CropBox", "Rotate"})
+                        if (const auto *value = node.as<dictionary>().find(key); value && !inherits.contains(key)) inherits.add(key, *value);
+                }
+                page_ids.push_back(id);
+                inherited.push_back(std::move(inherits));
+            }
+            if (page_ids.empty()) damaged("no pages found");
         }
 
         void walk(const std::uint32_t id, dictionary inherits, std::set<std::uint32_t> &visited, const int depth) {
@@ -936,8 +1162,14 @@ namespace sc::pdflite {
     std::shared_ptr<reader::impl> reader::opened(std::string bytes, const std::string_view password) {
         auto state = std::make_shared<impl>();
         state->bytes = std::move(bytes);
-        state->read_structure();
+        state->read_header();
+        try {
+            state->read_structure();
+        } catch (const std::runtime_error &) {
+            state->rebuild();
+        }
         state->read_security(password);
+        state->register_object_streams();
         state->read_pages();
         return state;
     }
@@ -945,6 +1177,8 @@ namespace sc::pdflite {
     const dictionary &reader::trailer() const { return impl_->trailer_entries; }
 
     bool reader::encrypted() const { return impl_->security.has_value(); }
+
+    bool reader::repaired() const { return impl_->repaired; }
 
     object reader::get(const std::uint32_t id) const { return impl_->get(id); }
 
