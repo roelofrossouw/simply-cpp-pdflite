@@ -240,5 +240,96 @@ int main() {
         CHECK(read(locked) == before);
     }
 
+    SECTION("decorate(): a page behind every page, or over it; each decoration page a form written once");
+    {
+        // A three-page decoration of pdflite's own (A5).
+        const auto letterhead = own(out / "reader-letterhead.pdf", "Letterhead");
+        const auto report = fixtures / "objstm.pdf"; // 7 pages
+        const auto behind = out / "reader-behind.pdf";
+        decorate(report, letterhead, behind);
+        const reader pdf{behind};
+        CHECK_EQ(pdf.page_count(), std::size_t{7});
+        CHECK_EQ(title(pdf), string{"Check"}); // the input's information, not the decoration's
+        // Each page names the form; the letterhead's three pages are 1, 2, and 3 on every later page.
+        auto form_of = [&](const reader &r, const std::size_t page) -> std::uint32_t {
+            const object resources = r.resolve(r.page(page).at("Resources"));
+            const object forms = r.resolve(resources.as<dictionary>().at("XObject"));
+            const auto *found = forms.as<dictionary>().find("SCDecoration");
+            return found && found->is<reference>() ? found->as<reference>().id : 0;
+        };
+        CHECK(form_of(pdf, 0) != 0);
+        CHECK(form_of(pdf, 0) != form_of(pdf, 1));
+        CHECK(form_of(pdf, 2) != form_of(pdf, 1));
+        CHECK_EQ(form_of(pdf, 6), form_of(pdf, 2)); // its last page on the rest, written once
+        const auto form = pdf.stream(form_of(pdf, 0));
+        CHECK(form.has_value());
+        if (form) {
+            CHECK(pdf.decoded(*form).find("(Letterhead 1) Tj") != string::npos);
+            const auto subtype = form->entries.at("Subtype").as<name>().text(); // a copy for CHECK_EQ
+            CHECK_EQ(subtype, string{"Form"});
+        }
+        // Behind: drawn first, the page's own content after it, unchanged.
+        const string first = page_text(pdf, 0);
+        CHECK(first.starts_with("q 1.4143 0 0 1.4143 ")); // the A5 letterhead scaled up to the A4 page
+        CHECK(first.find("/SCDecoration Do Q") < first.find("BT"));
+        CHECK(first.ends_with(page_text(reader{report}, 0)));
+
+        // Over: the page's content kept to itself in q ... Q, the stamp drawn after it.
+        const auto over = out / "reader-over.pdf";
+        decorate(report, letterhead, over, layer::over);
+        const string stamped = page_text(reader{over}, 0);
+        CHECK(stamped.starts_with("q\n"));
+        CHECK(stamped.find("/SCDecoration Do Q") > stamped.find(page_text(reader{report}, 0)));
+
+        // A page turned (/Rotate 90): the decoration turned with it, so it's upright as shown.
+        const auto turned = out / "reader-turned.pdf";
+        const auto rotated = read(fixtures / "quartz.pdf");
+        const reader quartz = reader::from_memory(rotated);
+        const auto page_id = quartz.pages()[0];
+        // An incremental update giving the page /Rotate 90.
+        dictionary page = quartz.get(page_id).as<dictionary>();
+        page.set("Rotate", 90);
+        string updated = rotated;
+        const auto at = updated.size();
+        updated += std::to_string(page_id) + " 0 obj\n" + page.write() + "\nendobj\n";
+        const auto table = updated.size();
+        char entry[32];
+        std::snprintf(entry, sizeof entry, "%010zu 00000 n \n", at);
+        const auto previous = rotated.substr(rotated.rfind("startxref") + 9);
+        updated += "xref\n" + std::to_string(page_id) + " 1\n" + entry + "trailer\n<< /Size " +
+                   std::to_string(quartz.trailer().at("Size").as<std::int64_t>()) + " /Root " +
+                   std::to_string(quartz.trailer().at("Root").as<reference>().id) + " 0 R /Prev " + std::to_string(std::stoull(previous)) +
+                   " >>\nstartxref\n" + std::to_string(table) + "\n%%EOF\n";
+        const auto turned_input = out / "reader-turned-input.pdf";
+        std::ofstream{turned_input, std::ios::binary} << updated;
+        decorate(turned_input, letterhead, turned);
+        const string drawn = page_text(reader{turned}, 0);
+        CHECK(drawn.starts_with("q 0 ")); // a quarter turn: cm's a is 0
+
+        // Passwords on the result, written over its input.
+        const auto copy = out / "reader-decorated-in-place.pdf";
+        fs::copy_file(report, copy, fs::copy_options::overwrite_existing);
+        decorate(copy, letterhead, copy, layer::behind, protection{"open", "admin"});
+        note_password(copy, "open");
+        CHECK_EQ(reader(copy, "open").page_count(), std::size_t{7});
+
+        // A decoration without pages (made by hand: pdflite writes none), and nothing to merge.
+        string none = "%PDF-1.7\n";
+        const auto catalog_at = none.size();
+        none += "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
+        const auto pages_at = none.size();
+        none += "2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n";
+        const auto xref_at = none.size();
+        char entries[64];
+        std::snprintf(entries, sizeof entries, "%010zu 00000 n \n%010zu 00000 n \n", catalog_at, pages_at);
+        none += string{"xref\n0 3\n0000000000 65535 f \n"} + entries + "trailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n" +
+                std::to_string(xref_at) + "\n%%EOF\n";
+        const reader empty = reader::from_memory(none);
+        CHECK_EQ(empty.page_count(), std::size_t{0});
+        CHECK_THROWS_AS(decorate(reader{report}, empty, out / "reader-never.pdf"), std::invalid_argument);
+        CHECK_THROWS_AS(merge(std::vector<fs::path>{}, out / "reader-never.pdf"), std::invalid_argument);
+        CHECK(!fs::exists(out / "reader-never.pdf"));
+    }
+
     TEST_SUMMARY();
 }

@@ -16,7 +16,8 @@
 //   pdflite/encryption.h  passwords and permissions: AES-256 (OpenSSL)
 //   pdflite/document.h  pages, fonts and the document's information
 //   pdflite/reader.h    an existing PDF's objects and pages
-//   pdflite/merge.h     existing PDFs' pages in a new file (merge), a file given passwords (protect)
+//   pdflite/merge.h     existing PDFs' pages in a new file (merge), a file given passwords
+//                       (protect), another file's pages behind or over its pages (decorate)
 // Positions are sc-graphics' canvas's: points from the page's top-left corner, y down (PDF's
 // own, y up from the bottom, are what gets written).
 #include "pdflite/object.h"
