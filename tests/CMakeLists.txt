@@ -15,6 +15,12 @@ target_compile_definitions(test-pdflite PRIVATE SC_PDFLITE_TEST_PHOTO="${CMAKE_C
 set_tests_properties(test-pdflite PROPERTIES
         ENVIRONMENT "SC_PDFLITE_OUTPUT=${pdflite_output}"
         FIXTURES_SETUP pdflite_files)
+# The reader, merge() and protect(), on pdflite's own files and on others' (resource/pdf).
+add_sc_test(reader LABELS unit)
+target_compile_definitions(test-reader PRIVATE SC_PDFLITE_TEST_PDFS="${CMAKE_CURRENT_SOURCE_DIR}/resource/pdf")
+set_tests_properties(test-reader PROPERTIES
+        ENVIRONMENT "SC_PDFLITE_OUTPUT=${pdflite_output}"
+        FIXTURES_SETUP pdflite_files)
 foreach (checker IN ITEMS qpdf pdfcpu mutool)
     find_program(${checker}_program ${checker})
     if (${checker}_program)

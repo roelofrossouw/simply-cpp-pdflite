@@ -4,7 +4,8 @@
 // simply-cpp's own PDF writer: ISO 32000-1 (PDF 1.7), strictly, with zlib, FreeType and OpenSSL
 // as its only libraries. Pages with content streams (paths, colours, clipping, transparency,
 // text), PDF's built-in fonts and embedded ones, JPEG, PNG and SVG pictures, links, bookmarks and
-// encryption. Each part has its header, to include alone:
+// encryption; and existing PDFs read, merged and given passwords. Each part has its header, to
+// include alone:
 //   pdflite/object.h    how values are written: numbers, names, strings, dates, references
 //   pdflite/file.h      the file: header, objects, cross-reference table, trailer
 //   pdflite/content.h   a page's content stream, which refuses what PDF forbids
@@ -14,6 +15,8 @@
 //   pdflite/font.h      embedded fonts (FreeType), written as subsets
 //   pdflite/encryption.h  passwords and permissions: AES-256 (OpenSSL)
 //   pdflite/document.h  pages, fonts and the document's information
+//   pdflite/reader.h    an existing PDF's objects and pages
+//   pdflite/merge.h     existing PDFs' pages in a new file (merge), a file given passwords (protect)
 // Positions are sc-graphics' canvas's: points from the page's top-left corner, y down (PDF's
 // own, y up from the bottom, are what gets written).
 #include "pdflite/object.h"
@@ -27,5 +30,7 @@
 #include "pdflite/font.h"
 #include "pdflite/encryption.h"
 #include "pdflite/document.h"
+#include "pdflite/reader.h"
+#include "pdflite/merge.h"
 
 #endif //SC_PDFLITE_H

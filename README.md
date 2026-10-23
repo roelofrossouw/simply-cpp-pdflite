@@ -50,6 +50,23 @@ What it writes so far:
 - **Bookmarks:** the reader's outline, nested by level, with Unicode titles; the file opens with
   it showing.
 
+And what it reads (since 4.3.0):
+
+- **Existing PDFs** (`pdflite/reader.h`, `sc::pdflite::reader`): their objects and pages, from
+  cross-reference tables or streams, object streams and incremental updates (the newest object
+  wins), FlateDecode with its predictors decoded. Files encrypted by the standard security handler
+  are opened with the user's or the owner's password (or none, when only an owner's is set): RC4
+  40 and 128 bits, AES-128 (revisions 2 to 4) and AES-256 (revision 6). Well-formed files only so
+  far: one whose cross-reference doesn't lead to its objects throws `std::runtime_error` rather
+  than being repaired.
+- **Merging** (`pdflite/merge.h`, `sc::pdflite::merge()`): the pages of several PDFs, in order, in
+  a new file, which may be one of the inputs. Each page comes as it was (content, resources,
+  annotations, links to pages of its own file); the first file's title, bookmarks and named
+  destinations come too. Streams are copied as they're encoded, so nothing is decompressed and
+  compressed again.
+- **Passwords for an existing file** (`sc::pdflite::protect()`, or `merge()` with a
+  `protection`): AES-256, whatever the input had.
+
 Still to come: a font chosen per character when one font lacks it, and an `sc::canvas` on top.
 Values are checked as they're written: a number that isn't finite, a page side readers can't show
 (outside 3 to 14,400 points) or malformed UTF-8 throws `std::invalid_argument`.
@@ -62,8 +79,9 @@ the bottom) as they're written, transforms included.
 Each part has its own header (and source), to work on and include alone: `pdflite/object.h`
 (PDF's values: `name`, `string`, `reference`, `array`, `dictionary`, and `object` holding any of
 them, each writing itself and checked as it's made), `pdflite/file.h` (the file: objects, the cross-reference table,
-the trailer), `pdflite/content.h` (a page's content stream) and `pdflite/document.h` (pages,
-fonts, information). `pdflite.h` includes them all.
+the trailer), `pdflite/content.h` (a page's content stream), `pdflite/document.h` (pages,
+fonts, information), `pdflite/reader.h` (an existing file read) and `pdflite/merge.h` (`merge()`,
+`protect()`). `pdflite.h` includes them all.
 
 **Documentation:** the [simply-cpp wiki](https://github.com/roelofrossouw/simply-cpp/wiki) has a [PDF guide](https://github.com/roelofrossouw/simply-cpp/wiki/PDF), plus [getting started](https://github.com/roelofrossouw/simply-cpp/wiki/Getting-Started) for the whole suite.
 
@@ -510,6 +528,44 @@ SC_STEP(open.close());
 SC_SHOW(print_only.string());
 ```
 <!-- /sc-example -->
+
+## Merging
+
+`sc-pdflite-merge` writes the pages of PDFs, one file after another, into a new one, with
+passwords when asked. Its code, copied from `examples/sc-pdflite-merge.cpp` at configure time:
+
+<!-- sc-example: examples/sc-pdflite-merge.cpp -->
+```cpp
+std::vector<sc::pdflite::reader> inputs;
+for (const auto &file: args["inputs"]) {
+    inputs.emplace_back(file.get<std::string>(), args.as<std::string>("password"));
+    std::cout << file.get<std::string>() << ": " << inputs.back().page_count() << " pages"
+              << (inputs.back().encrypted() ? " (encrypted)" : "") << '\n';
+}
+std::optional<sc::pdflite::protection> protection;
+const auto user = args.as<std::string>("user-password"), owner = args.as<std::string>("owner-password");
+if (!user.empty() || !owner.empty()) protection = sc::pdflite::protection{user, owner};
+const std::filesystem::path output = args.as<std::string>("output");
+const std::vector<std::reference_wrapper<const sc::pdflite::reader>> files(inputs.begin(), inputs.end());
+sc::pdflite::merge(files, output, protection);
+std::cout << output.string() << ": " << sc::pdflite::reader{output, user.empty() ? owner : user}.page_count() << " pages"
+          << (protection ? " (encrypted)" : "") << '\n';
+```
+<!-- /sc-example -->
+
+Files on disk merge in one call, and a file gets passwords with another:
+
+```cpp
+sc::pdflite::merge({"report.pdf", "appendix.pdf"}, "report.pdf");          // into the first one
+sc::pdflite::protect("report.pdf", "report.pdf", {"", "owner"});            // print only, for anyone
+const sc::pdflite::reader pdf{"locked.pdf", "open sesame"};                 // a password to open it
+pdf.page_count(); pdf.page(0); pdf.trailer(); pdf.get(12); pdf.stream(12); // pages and objects
+```
+
+What isn't copied from the files after the first: their bookmarks, named destinations, form
+fields (their widgets still show), tagged structure and document-level metadata. Its test reads
+files written by others too (`tests/resource/pdf`: qpdf's cross-reference streams, object
+streams, linearized output and every kind of encryption, macOS's Quartz, MuPDF).
 
 ## Checking the files
 

@@ -23,7 +23,7 @@ set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
 add_sc_object(pdflite
-        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/jpeg.cpp src/png.cpp src/svg.cpp src/font.cpp src/encryption.cpp
+        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/jpeg.cpp src/png.cpp src/svg.cpp src/font.cpp src/encryption.cpp src/reader.cpp src/merge.cpp
         LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB PkgConfig::freetype2 OpenSSL::Crypto
         PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB OpenSSL::Crypto)
 
@@ -46,6 +46,7 @@ add_sc_example(sc-pdflite-png)
 add_sc_example(sc-pdflite-svg)
 add_sc_example(sc-pdflite-fonts)
 add_sc_example(sc-pdflite-passwords)
+add_sc_example(sc-pdflite-merge)
 # The PNG and SVG demos' pictures are installed with them, and found in the source when they run
 # from a build.
 install(FILES examples/resource/badge.png examples/resource/badge-interlaced.png examples/resource/stamp.png
