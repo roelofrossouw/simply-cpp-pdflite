@@ -2,6 +2,11 @@
 
 #include "pdflite/file.h"
 
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <functional>
+#include <map>
 #include <memory>
 #include <set>
 #include <stdexcept>
@@ -37,18 +42,21 @@ namespace sc::pdflite {
                 return out;
             }
 
-            // Page index, written as number, under parent.
-            void write_page(const std::size_t index, const std::uint32_t number, const std::uint32_t parent) {
+            // Page index, written as number under parent; adjust (when given) changes the copy first.
+            void write_page(const std::size_t index, const std::uint32_t number, const std::uint32_t parent,
+                            const std::function<void(dictionary &copy, const dictionary &theirs)> &adjust = {}) {
+                const dictionary theirs = in_.page(index);
                 dictionary page;
                 page.add("Type", name{"Page"});
                 page.add("Parent", reference{parent});
-                for (const auto &[key, value]: in_.page(index)) {
+                for (const auto &[key, value]: theirs) {
                     const auto &k = key.text();
                     // Its old parent, and what ties it to structures that aren't copied (article
                     // beads, the tagged structure tree).
                     if (k == "Type" || k == "Parent" || k == "B" || k == "StructParents") continue;
                     if (object copied = copy(value); !copied.is<std::nullptr_t>()) page.add(k, std::move(copied));
                 }
+                if (adjust) adjust(page, theirs);
                 out_.write(number, page);
             }
 
@@ -87,6 +95,8 @@ namespace sc::pdflite {
                 }
             }
 
+            [[nodiscard]] const reader &in() const { return in_; }
+
         private:
             object copy_reference(const std::uint32_t theirs) {
                 if (const auto page = pages_.find(theirs); page != pages_.end()) return reference{page->second};
@@ -94,8 +104,9 @@ namespace sc::pdflite {
                 if (dropped_.contains(theirs)) return nullptr;
                 const object target = in_.get(theirs);
                 // A reference to nothing is a reference to null; the old page tree and catalog aren't
-                // copied (their pages are, by number_pages()).
-                if ((target.is<std::nullptr_t>() && !in_.is_stream(theirs)) || has_type(target, "Pages") || has_type(target, "Catalog")) {
+                // copied (pages are, by number_pages()), nor is a page that isn't (a decoration's).
+                if ((target.is<std::nullptr_t>() && !in_.is_stream(theirs)) || has_type(target, "Pages") || has_type(target, "Catalog") ||
+                    has_type(target, "Page")) {
                     dropped_.insert(theirs);
                     return nullptr;
                 }
@@ -112,82 +123,287 @@ namespace sc::pdflite {
             std::set<std::uint32_t> dropped_;
             std::vector<std::pair<std::uint32_t, std::uint32_t>> queue_;
         };
+
+        // The new file: written beside output and renamed when done (output may be one of the
+        // inputs, and a failure leaves it as it was), encrypted when asked, with one page tree.
+        // write() fills it, given the file, the tree's number, the kids to add to and the catalog
+        // and information to complete.
+        void write_file(const std::filesystem::path &output, const std::optional<protection> &protect,
+                        const std::function<void(file &out, std::uint32_t tree, array &kids, dictionary &catalog, std::uint32_t &info)> &write) {
+            std::filesystem::path part = output;
+            part += ".part";
+            try {
+                file out{part};
+                std::uint32_t encrypt = 0;
+                if (protect) {
+                    const auto security = std::make_shared<const encryption>(*protect);
+                    encrypt = out.allocate();
+                    out.encrypt(security, encrypt); // everything after it is encrypted, but its own dictionary
+                    out.write(encrypt, security->dictionary());
+                }
+                const auto catalog_id = out.allocate();
+                const auto tree = out.allocate();
+                array kids;
+                dictionary catalog{{"Type", name{"Catalog"}}, {"Pages", reference{tree}}};
+                std::uint32_t info = 0;
+                write(out, tree, kids, catalog, info);
+                if (kids.empty()) throw std::invalid_argument("sc::pdflite: no pages to write (readers refuse a PDF without any)");
+                const auto count = kids.size();
+                out.write(tree, dictionary{{"Type", name{"Pages"}}, {"Kids", std::move(kids)}, {"Count", count}});
+                out.write(catalog_id, catalog);
+                out.finish(catalog_id, info, encrypt);
+            } catch (...) {
+                std::error_code ignored;
+                std::filesystem::remove(part, ignored);
+                throw;
+            }
+            std::error_code error;
+            std::filesystem::rename(part, output, error);
+            if (error) {
+                std::filesystem::remove(part, error);
+                throw std::runtime_error("sc::pdflite: can't write " + output.string());
+            }
+        }
+
+        // An input's document information, bookmarks and named destinations, copied into the new
+        // catalog and information.
+        void copy_document(copier &copy, file &out, dictionary &catalog, std::uint32_t &info) {
+            const reader &in = copy.in();
+            if (const auto *found = in.trailer().find("Info")) {
+                if (const object copied = copy.copy(*found); copied.is<reference>()) {
+                    info = copied.as<reference>().id;
+                } else if (copied.is<dictionary>()) {
+                    info = out.allocate();
+                    out.write(info, copied);
+                }
+            }
+            const dictionary theirs = in.catalog();
+            if (const auto *outlines = theirs.find("Outlines")) {
+                if (object copied = copy.copy(*outlines); !copied.is<std::nullptr_t>()) {
+                    catalog.add("Outlines", std::move(copied));
+                    if (const auto *mode = theirs.find("PageMode"); mode && mode->is<name>()) catalog.add("PageMode", *mode);
+                }
+            }
+            if (const auto *dests = theirs.find("Dests"))
+                if (object copied = copy.copy(*dests); !copied.is<std::nullptr_t>()) catalog.add("Dests", std::move(copied));
+            if (const auto *names = theirs.find("Names")) {
+                if (const object resolved = in.resolve(*names); resolved.is<dictionary>()) {
+                    if (const auto *dests = resolved.as<dictionary>().find("Dests")) {
+                        if (object copied = copy.copy(*dests); !copied.is<std::nullptr_t>())
+                            catalog.add("Names", dictionary{{"Dests", std::move(copied)}});
+                    }
+                }
+            }
+            if (const auto *layout = theirs.find("PageLayout"); layout && layout->is<name>()) catalog.add("PageLayout", *layout);
+        }
+
+        // ---- Decorations ----
+
+        // An affine transform as PDF's cm has it: x' = a x + c y + e, y' = b x + d y + f.
+        struct matrix {
+            double a = 1, b = 0, c = 0, d = 1, e = 0, f = 0;
+
+            // This transform, then then.
+            [[nodiscard]] matrix then(const matrix &next) const {
+                return {a * next.a + b * next.c, a * next.b + b * next.d, c * next.a + d * next.c, c * next.b + d * next.d,
+                        e * next.a + f * next.c + next.e, e * next.b + f * next.d + next.f};
+            }
+
+            [[nodiscard]] matrix inverse() const {
+                const double det = a * d - b * c;
+                if (det == 0) throw std::invalid_argument("sc::pdflite: a transform that can't be undone");
+                return {d / det, -b / det, -c / det, a / det, (c * f - d * e) / det, (b * e - a * f) / det};
+            }
+
+            [[nodiscard]] std::string cm() const {
+                // Close to whole numbers they're written whole: 0.99999999 would be 1.0000 anyway.
+                auto n = [](const double v) { return number(std::abs(v - std::round(v)) < 1e-9 ? std::round(v) : v); };
+                return n(a) + " " + n(b) + " " + n(c) + " " + n(d) + " " + n(e) + " " + n(f) + " cm";
+            }
+        };
+
+        double number_in(const reader &in, const object &value) {
+            const object resolved = in.resolve(value);
+            if (resolved.is<std::int64_t>()) return static_cast<double>(resolved.as<std::int64_t>());
+            if (resolved.is<double>()) return resolved.as<double>();
+            throw std::runtime_error("sc::pdflite: a page box with something other than numbers in it");
+        }
+
+        // A page's visible area (its crop box, else its media box; 14.11.2) and turn, as shown.
+        struct page_frame {
+            double x0 = 0, y0 = 0, width = 612, height = 792;
+            int rotate = 0; // 0, 90, 180 or 270, clockwise
+
+            // The page as shown: its size, and from its user space to there (origin bottom-left).
+            [[nodiscard]] double shown_width() const { return rotate % 180 == 0 ? width : height; }
+            [[nodiscard]] double shown_height() const { return rotate % 180 == 0 ? height : width; }
+
+            [[nodiscard]] matrix to_shown() const {
+                switch (rotate) {
+                    case 90: return {0, -1, 1, 0, -y0, x0 + width};
+                    case 180: return {-1, 0, 0, -1, x0 + width, y0 + height};
+                    case 270: return {0, 1, -1, 0, y0 + height, -x0};
+                    default: return {1, 0, 0, 1, -x0, -y0};
+                }
+            }
+        };
+
+        page_frame frame_of(const reader &in, const dictionary &page) {
+            page_frame out;
+            const auto *box = page.find("CropBox");
+            if (!box) box = page.find("MediaBox");
+            if (box) {
+                const object resolved = in.resolve(*box);
+                if (resolved.is<array>() && resolved.as<array>().size() == 4) {
+                    const auto &corners = resolved.as<array>();
+                    const double x1 = number_in(in, corners[0]), y1 = number_in(in, corners[1]);
+                    const double x2 = number_in(in, corners[2]), y2 = number_in(in, corners[3]);
+                    out.x0 = std::min(x1, x2);
+                    out.y0 = std::min(y1, y2);
+                    out.width = std::abs(x2 - x1);
+                    out.height = std::abs(y2 - y1);
+                }
+            }
+            if (const auto *rotate = page.find("Rotate")) {
+                const object resolved = in.resolve(*rotate);
+                if (resolved.is<std::int64_t>()) out.rotate = static_cast<int>(((resolved.as<std::int64_t>() % 360) + 360) % 360) / 90 * 90;
+            }
+            if (out.width <= 0 || out.height <= 0) throw std::runtime_error("sc::pdflite: a page of no size");
+            return out;
+        }
+
+        // From the decoration's page's user space into the page's: turned upright as each is shown,
+        // scaled to fit (keeping its proportions) and centred.
+        matrix placement(const page_frame &decoration, const page_frame &page) {
+            const double scale = std::min(page.shown_width() / decoration.shown_width(), page.shown_height() / decoration.shown_height());
+            const matrix fit{scale, 0, 0, scale, (page.shown_width() - scale * decoration.shown_width()) / 2,
+                             (page.shown_height() - scale * decoration.shown_height()) / 2};
+            return decoration.to_shown().then(fit).then(page.to_shown().inverse());
+        }
+
+        // A decoration's pages as form XObjects (8.10), each written once, the first time it's used.
+        class decorations {
+        public:
+            decorations(copier &copy, file &out) : copy_(copy), out_(out) {
+                if (copy.in().page_count() == 0) throw std::invalid_argument("sc::pdflite: a decoration without pages");
+            }
+
+            // For page index of the input: the form (its number) and its frame.
+            std::pair<std::uint32_t, page_frame> for_page(const std::size_t index) {
+                const auto which = std::min(index, copy_.in().page_count() - 1);
+                if (const auto found = forms_.find(which); found != forms_.end()) return found->second;
+                return forms_.emplace(which, make(which)).first->second;
+            }
+
+        private:
+            std::pair<std::uint32_t, page_frame> make(const std::size_t which) {
+                const reader &in = copy_.in();
+                const dictionary page = in.page(which);
+                const page_frame frame = frame_of(in, page);
+                dictionary form{{"Type", name{"XObject"}}, {"Subtype", name{"Form"}},
+                                {"BBox", array{frame.x0, frame.y0, frame.x0 + frame.width, frame.y0 + frame.height}}};
+                if (const auto *resources = page.find("Resources"))
+                    if (object copied = copy_.copy(*resources); !copied.is<std::nullptr_t>()) form.add("Resources", std::move(copied));
+                if (const auto *group = page.find("Group")) // a transparency group stays one
+                    if (object copied = copy_.copy(*group); !copied.is<std::nullptr_t>()) form.add("Group", std::move(copied));
+                // Its content: one stream copied as it's encoded, or several joined (decoded first).
+                std::vector<std::uint32_t> parts;
+                if (const auto *contents = page.find("Contents")) {
+                    if (contents->is<reference>() && in.is_stream(contents->as<reference>().id)) {
+                        parts.push_back(contents->as<reference>().id);
+                    } else if (const object list = in.resolve(*contents); list.is<array>()) {
+                        for (const auto &part: list.as<array>())
+                            if (part.is<reference>() && in.is_stream(part.as<reference>().id)) parts.push_back(part.as<reference>().id);
+                    }
+                }
+                const auto id = out_.allocate();
+                if (parts.size() == 1) {
+                    const auto data = *in.stream(parts[0]);
+                    for (const auto key: {"Filter", "DecodeParms"})
+                        if (const auto *value = data.entries.find(key))
+                            if (object copied = copy_.copy(*value); !copied.is<std::nullptr_t>()) form.add(key, std::move(copied));
+                    out_.write_stream(id, std::move(form), data.data, false);
+                } else {
+                    std::string joined;
+                    for (const auto part: parts) joined += in.decoded(*in.stream(part)) + "\n";
+                    out_.write_stream(id, std::move(form), joined);
+                }
+                return {id, frame};
+            }
+
+            copier &copy_;
+            file &out_;
+            std::map<std::size_t, std::pair<std::uint32_t, page_frame>> forms_;
+        };
+
+        // Content streams of the new file's own, compressed: the drawing around a page's content,
+        // each written once and shared by the pages that draw the same.
+        class small_streams {
+        public:
+            explicit small_streams(file &out) : out_(out) {}
+
+            reference operator()(const std::string &content) {
+                if (const auto found = written_.find(content); found != written_.end()) return found->second;
+                const auto id = out_.allocate();
+                out_.write_stream(id, dictionary{}, content);
+                return written_.emplace(content, reference{id}).first->second;
+            }
+
+        private:
+            file &out_;
+            std::map<std::string, reference> written_;
+        };
+
+        // The page's resources with the form added under a name of its own: a copy, so resources
+        // other pages share aren't changed.
+        std::string add_form(copier &copy, dictionary &page, const dictionary &theirs, const std::uint32_t form) {
+            const reader &in = copy.in();
+            const object resources = theirs.find("Resources") ? in.resolve(*theirs.find("Resources")) : object{dictionary{}};
+            dictionary mine = resources.is<dictionary>() ? copy.copy(resources).as<dictionary>() : dictionary{};
+            dictionary forms;
+            if (resources.is<dictionary>()) {
+                if (const auto *xobjects = resources.as<dictionary>().find("XObject"))
+                    if (const object listed = in.resolve(*xobjects); listed.is<dictionary>()) forms = copy.copy(listed).as<dictionary>();
+            }
+            std::string label = "SCDecoration";
+            for (int n = 2; forms.contains(label); ++n) label = "SCDecoration" + std::to_string(n);
+            forms.add(label, reference{form});
+            mine.set("XObject", std::move(forms));
+            page.set("Resources", std::move(mine));
+            return label;
+        }
+
+        // The page's content streams, copied, in order: one stream, or an array of them (itself
+        // perhaps a reference); none for a page without content.
+        std::vector<object> contents_of(copier &copy, const dictionary &original) {
+            std::vector<object> out;
+            const auto *contents = original.find("Contents");
+            if (!contents) return out;
+            const reader &in = copy.in();
+            if (contents->is<reference>() && in.is_stream(contents->as<reference>().id)) {
+                out.push_back(copy.copy(*contents));
+            } else if (const object list = in.resolve(*contents); list.is<array>()) {
+                for (const auto &part: list.as<array>())
+                    if (object copied = copy.copy(part); copied.is<reference>()) out.push_back(std::move(copied));
+            }
+            return out;
+        }
     }
 
     void merge(const std::vector<std::reference_wrapper<const reader>> &inputs, const std::filesystem::path &output,
                const std::optional<protection> &protect) {
-        // Written beside output and renamed when done: output may be one of the inputs, and a
-        // failure leaves it as it was.
-        std::filesystem::path part = output;
-        part += ".part";
-        try {
-            file out{part};
-            std::uint32_t encrypt = 0;
-            if (protect) {
-                const auto security = std::make_shared<const encryption>(*protect);
-                encrypt = out.allocate();
-                out.encrypt(security, encrypt); // everything after it is encrypted, but its own dictionary
-                out.write(encrypt, security->dictionary());
-            }
-            const auto catalog_id = out.allocate();
-            const auto tree = out.allocate();
-            array kids;
-            dictionary catalog{{"Type", name{"Catalog"}}, {"Pages", reference{tree}}};
-            std::uint32_t info = 0;
+        write_file(output, protect, [&](file &out, const std::uint32_t tree, array &kids, dictionary &catalog, std::uint32_t &info) {
             for (std::size_t n = 0; n < inputs.size(); ++n) {
-                const reader &in = inputs[n].get();
-                copier copy{in, out};
+                copier copy{inputs[n].get(), out};
                 const auto numbers = copy.number_pages();
                 for (std::size_t i = 0; i < numbers.size(); ++i) {
                     copy.write_page(i, numbers[i], tree);
                     kids.push_back(reference{numbers[i]});
                 }
-                if (n == 0) {
-                    // The first input's information, bookmarks and named destinations.
-                    if (const auto *found = in.trailer().find("Info")) {
-                        if (const object copied = copy.copy(*found); copied.is<reference>()) {
-                            info = copied.as<reference>().id;
-                        } else if (copied.is<dictionary>()) {
-                            info = out.allocate();
-                            out.write(info, copied);
-                        }
-                    }
-                    const dictionary theirs = in.catalog();
-                    if (const auto *outlines = theirs.find("Outlines")) {
-                        if (object copied = copy.copy(*outlines); !copied.is<std::nullptr_t>()) {
-                            catalog.add("Outlines", std::move(copied));
-                            if (const auto *mode = theirs.find("PageMode"); mode && mode->is<name>()) catalog.add("PageMode", *mode);
-                        }
-                    }
-                    if (const auto *dests = theirs.find("Dests"))
-                        if (object copied = copy.copy(*dests); !copied.is<std::nullptr_t>()) catalog.add("Dests", std::move(copied));
-                    if (const auto *names = theirs.find("Names")) {
-                        if (const object resolved = in.resolve(*names); resolved.is<dictionary>()) {
-                            if (const auto *dests = resolved.as<dictionary>().find("Dests")) {
-                                if (object copied = copy.copy(*dests); !copied.is<std::nullptr_t>())
-                                    catalog.add("Names", dictionary{{"Dests", std::move(copied)}});
-                            }
-                        }
-                    }
-                    if (const auto *layout = theirs.find("PageLayout"); layout && layout->is<name>()) catalog.add("PageLayout", *layout);
-                }
+                if (n == 0) copy_document(copy, out, catalog, info);
                 copy.flush();
             }
-            const auto count = kids.size();
-            out.write(tree, dictionary{{"Type", name{"Pages"}}, {"Kids", std::move(kids)}, {"Count", count}});
-            out.write(catalog_id, catalog);
-            out.finish(catalog_id, info, encrypt);
-        } catch (...) {
-            std::error_code ignored;
-            std::filesystem::remove(part, ignored);
-            throw;
-        }
-        std::error_code error;
-        std::filesystem::rename(part, output, error);
-        if (error) {
-            std::filesystem::remove(part, error);
-            throw std::runtime_error("sc::pdflite: can't write " + output.string());
-        }
+        });
     }
 
     void merge(const std::vector<std::filesystem::path> &inputs, const std::filesystem::path &output, const std::optional<protection> &protect) {
@@ -206,5 +422,46 @@ namespace sc::pdflite {
     void protect(const std::filesystem::path &input, const std::filesystem::path &output, const protection &settings, const std::string_view password) {
         const reader in{input, password};
         merge({std::cref(in)}, output, settings);
+    }
+
+    void decorate(const reader &input, const reader &decoration, const std::filesystem::path &output, const layer where,
+                  const std::optional<protection> &protect) {
+        write_file(output, protect, [&](file &out, const std::uint32_t tree, array &kids, dictionary &catalog, std::uint32_t &info) {
+            copier copy{input, out};
+            copier theirs{decoration, out};
+            decorations forms{theirs, out};
+            small_streams small_stream{out};
+            const auto numbers = copy.number_pages();
+            for (std::size_t i = 0; i < numbers.size(); ++i) {
+                copy.write_page(i, numbers[i], tree, [&](dictionary &page, const dictionary &original) {
+                    const auto [form, frame] = forms.for_page(i);
+                    const std::string label = add_form(copy, page, original, form);
+                    const std::string draw = "q " + placement(frame, frame_of(input, original)).cm() + " /" + label + " Do Q\n";
+                    array contents;
+                    if (where == layer::behind) {
+                        contents.push_back(small_stream(draw));
+                        for (auto &part: contents_of(copy, original)) contents.push_back(std::move(part));
+                    } else {
+                        // The page's own drawing kept to itself (it may leave the graphics state
+                        // changed), the stamp over it.
+                        contents.push_back(small_stream("q\n"));
+                        for (auto &part: contents_of(copy, original)) contents.push_back(std::move(part));
+                        contents.push_back(small_stream("Q\n" + draw));
+                    }
+                    page.set("Contents", std::move(contents));
+                });
+                kids.push_back(reference{numbers[i]});
+            }
+            copy_document(copy, out, catalog, info);
+            copy.flush();
+            theirs.flush();
+        });
+    }
+
+    void decorate(const std::filesystem::path &input, const std::filesystem::path &decoration, const std::filesystem::path &output,
+                  const layer where, const std::optional<protection> &protect) {
+        const reader pages{input};
+        const reader backdrop{decoration};
+        decorate(pages, backdrop, output, where, protect);
     }
 }

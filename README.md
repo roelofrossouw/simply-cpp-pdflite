@@ -66,6 +66,11 @@ And what it reads (since 4.3.0):
   compressed again.
 - **Passwords for an existing file** (`sc::pdflite::protect()`, or `merge()` with a
   `protection`): AES-256, whatever the input had.
+- **Backgrounds and stamps** (`sc::pdflite::decorate()`): another PDF's pages drawn behind a file's
+  pages (a letterhead) or over them (a stamp), its page n on page n and its last on the rest, as
+  pdftk's `multibackground` and `multistamp` do (and drawn exactly as pdftk draws them): turned
+  upright as each page is shown, scaled to fit the page's crop box and centred. Each decoration
+  page is a form XObject, written once however many pages show it.
 
 Still to come: a font chosen per character when one font lacks it, and an `sc::canvas` on top.
 Values are checked as they're written: a number that isn't finite, a page side readers can't show
@@ -532,7 +537,7 @@ SC_SHOW(print_only.string());
 ## Merging
 
 `sc-pdflite-merge` writes the pages of PDFs, one file after another, into a new one, with
-passwords when asked. Its code, copied from `examples/sc-pdflite-merge.cpp` at configure time:
+another PDF's pages behind (`--background`) or over them (`--stamp`) and passwords when asked. Its code, copied from `examples/sc-pdflite-merge.cpp` at configure time:
 
 <!-- sc-example: examples/sc-pdflite-merge.cpp -->
 ```cpp
@@ -547,7 +552,16 @@ const auto user = args.as<std::string>("user-password"), owner = args.as<std::st
 if (!user.empty() || !owner.empty()) protection = sc::pdflite::protection{user, owner};
 const std::filesystem::path output = args.as<std::string>("output");
 const std::vector<std::reference_wrapper<const sc::pdflite::reader>> files(inputs.begin(), inputs.end());
-sc::pdflite::merge(files, output, protection);
+const auto background = args.as<std::string>("background"), stamp = args.as<std::string>("stamp");
+if (background.empty() && stamp.empty()) {
+    sc::pdflite::merge(files, output, protection);
+} else {
+    // Merged first, then decorated in place: the passwords go on last.
+    sc::pdflite::merge(files, output);
+    if (!background.empty())
+        sc::pdflite::decorate(output, background, output, sc::pdflite::layer::behind, stamp.empty() ? protection : std::nullopt);
+    if (!stamp.empty()) sc::pdflite::decorate(output, stamp, output, sc::pdflite::layer::over, protection);
+}
 std::cout << output.string() << ": " << sc::pdflite::reader{output, user.empty() ? owner : user}.page_count() << " pages"
           << (protection ? " (encrypted)" : "") << '\n';
 ```
@@ -558,6 +572,8 @@ Files on disk merge in one call, and a file gets passwords with another:
 ```cpp
 sc::pdflite::merge({"report.pdf", "appendix.pdf"}, "report.pdf");          // into the first one
 sc::pdflite::protect("report.pdf", "report.pdf", {"", "owner"});            // print only, for anyone
+sc::pdflite::decorate("report.pdf", "letterhead.pdf", "report.pdf");       // its page behind every page
+sc::pdflite::decorate("report.pdf", "copy.pdf", "report.pdf", sc::pdflite::layer::over); // a stamp
 const sc::pdflite::reader pdf{"locked.pdf", "open sesame"};                 // a password to open it
 pdf.page_count(); pdf.page(0); pdf.trailer(); pdf.get(12); pdf.stream(12); // pages and objects
 ```
