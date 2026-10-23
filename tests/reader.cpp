@@ -170,14 +170,117 @@ int main() {
         CHECK_EQ(after.page_count(), std::size_t{3});
     }
 
-    SECTION("Not a PDF, or cut short: std::runtime_error");
+    SECTION("Not a PDF: std::runtime_error");
     {
         CHECK_THROWS_AS(reader::from_memory("Hello, world"), std::runtime_error);
-        const auto whole = read(fixtures / "quartz.pdf");
-        CHECK_THROWS_AS(reader::from_memory(whole.substr(0, whole.size() / 2)), std::runtime_error);
+        CHECK_THROWS_AS(reader::from_memory("%PDF-1.7\nnothing more\n"), std::runtime_error); // no objects at all
         CHECK_THROWS_AS(reader(out / "no-such-file.pdf"), std::runtime_error);
         const reader pdf{fixtures / "quartz.pdf"};
+        CHECK(!pdf.repaired());
         CHECK_THROWS_AS(pdf.decoded(sc::pdflite::stream{dictionary{{"Filter", name{"DCTDecode"}}}, "x"}), std::runtime_error);
+    }
+
+    SECTION("Damaged files repaired: the cross-reference rebuilt by scanning, pages found without their tree");
+    {
+        // Each damaged copy is read as the sound one is: same pages, same content.
+        auto same_as = [&](const reader &damaged, const fs::path &sound, const std::string &password = {}) {
+            const reader original{sound, password};
+            if (damaged.page_count() != original.page_count()) return false;
+            for (std::size_t i = 0; i < original.page_count(); ++i)
+                if (page_text(damaged, i) != page_text(original, i)) return false;
+            return true;
+        };
+        // Bytes inserted after the header: every offset in the cross-reference is off.
+        auto shifted = [](const string &pdf) {
+            const auto line = pdf.find('\n') + 1;
+            return pdf.substr(0, line) + "% a comment that moves every object along\n" + pdf.substr(line);
+        };
+        const auto quartz = read(fixtures / "quartz.pdf");
+
+        // Cut short before its cross-reference table: no xref, trailer or startxref.
+        const reader cut = reader::from_memory(quartz.substr(0, quartz.rfind("\nxref") + 1));
+        CHECK(cut.repaired());
+        CHECK(same_as(cut, fixtures / "quartz.pdf")); // the catalog found by its /Type
+        // startxref pointing nowhere.
+        string wrong = quartz;
+        wrong.replace(wrong.rfind("startxref") + 10, wrong.size() - wrong.rfind("startxref") - 10, "99999999\n%%EOF\n");
+        const reader nowhere = reader::from_memory(wrong);
+        CHECK(nowhere.repaired());
+        CHECK(same_as(nowhere, fixtures / "quartz.pdf"));
+        // Every offset off.
+        const reader moved = reader::from_memory(shifted(quartz));
+        CHECK(moved.repaired());
+        CHECK(same_as(moved, fixtures / "quartz.pdf"));
+
+        // A file whose objects are in object streams, its cross-reference stream lost.
+        const auto objstm = read(fixtures / "objstm.pdf");
+        string lost = objstm;
+        lost.replace(lost.rfind("startxref") + 10, lost.size() - lost.rfind("startxref") - 10, "12\n%%EOF\n");
+        const reader streams = reader::from_memory(lost);
+        CHECK(streams.repaired());
+        CHECK(same_as(streams, fixtures / "objstm.pdf"));
+        CHECK_EQ(title(streams), string{"Check"});
+
+        // Encrypted, and moved: decrypted once repaired (AES-256 with object streams, and RC4).
+        const reader aes = reader::from_memory(shifted(read(fixtures / "aes-256-objstm.pdf")), "user");
+        CHECK(aes.repaired());
+        CHECK(same_as(aes, fixtures / "aes-256-objstm.pdf", "user"));
+        CHECK_EQ(title(aes), string{"Check"});
+        const reader rc4 = reader::from_memory(shifted(read(fixtures / "rc4-40.pdf")));
+        CHECK(rc4.repaired());
+        CHECK(same_as(rc4, fixtures / "rc4-40.pdf"));
+
+        // Cut short with its trailer: RC4 and AES-128 need the file's /ID for their key, so it says
+        // so rather than read encrypted bytes as content. AES-256 doesn't: it's read.
+        const auto rc4_whole = read(fixtures / "rc4-40.pdf");
+        try {
+            const reader cut_rc4 = reader::from_memory(rc4_whole.substr(0, rc4_whole.rfind("\nxref") + 1));
+            CHECK(cut_rc4.page_count() == 0); // not reached
+            CHECK(false);
+        } catch (const std::runtime_error &error) {
+            CHECK(string{error.what()}.find("identifier") != string::npos);
+        }
+
+        // A stream's /Length wrong: its data found by its endstream, nothing rebuilt.
+        auto own_file = read(own(out / "reader-length.pdf", "Epsilon"));
+        const auto length_at = own_file.find("/Length ") + 8;
+        const auto digits = own_file.find_first_of(" />\n", length_at) - length_at;
+        own_file.replace(length_at, digits, string(digits - 1, '0') + "1"); // as many digits: nothing else moves
+        const reader length = reader::from_memory(own_file);
+        CHECK(!length.repaired());
+        CHECK(page_text(length, 0).find("(Epsilon 1) Tj") != string::npos ||
+              page_text(length, 1).find("(Epsilon 2) Tj") != string::npos); // whichever stream it was, all still read
+
+        // The page tree broken (/Kids misspelt): the pages taken in the order they're in the file.
+        auto broken_tree = read(own(out / "reader-tree.pdf", "Zeta"));
+        broken_tree.replace(broken_tree.find("/Kids"), 5, "/Kidz");
+        const reader loose = reader::from_memory(broken_tree);
+        CHECK(loose.repaired());
+        CHECK_EQ(loose.page_count(), std::size_t{3});
+        if (loose.page_count() == 3) {
+            CHECK(page_text(loose, 0).find("(Zeta 1) Tj") != string::npos);
+            CHECK(page_text(loose, 2).find("(Zeta 3) Tj") != string::npos);
+            CHECK(loose.page(1).contains("MediaBox"));
+        }
+
+        // A damaged file merged with a sound one: written whole (ctest's checkers read it too).
+        const auto damaged_file = out / "reader-damaged-input.pdf";
+        std::ofstream{damaged_file, std::ios::binary} << shifted(quartz);
+        const auto merged = out / "reader-merged-damaged.pdf";
+        merge({damaged_file, fixtures / "mutool.pdf"}, merged);
+        const reader result{merged};
+        CHECK(!result.repaired());
+        CHECK_EQ(result.page_count(), std::size_t{2});
+        fs::remove(damaged_file); // it's damaged: not one for the checkers
+
+        // Half a file: what can be found is read, or nothing is: it doesn't crash.
+        try {
+            const reader half = reader::from_memory(quartz.substr(0, quartz.size() / 2));
+            CHECK(half.repaired());
+            CHECK(half.page_count() <= 1);
+        } catch (const std::runtime_error &) {
+            CHECK(true);
+        }
     }
 
     SECTION("merge(): every page in order, links and the first file's title and bookmarks kept");

@@ -56,9 +56,16 @@ And what it reads (since 4.3.0):
   cross-reference tables or streams, object streams and incremental updates (the newest object
   wins), FlateDecode with its predictors decoded. Files encrypted by the standard security handler
   are opened with the user's or the owner's password (or none, when only an owner's is set): RC4
-  40 and 128 bits, AES-128 (revisions 2 to 4) and AES-256 (revision 6). Well-formed files only so
-  far: one whose cross-reference doesn't lead to its objects throws `std::runtime_error` rather
-  than being repaired.
+  40 and 128 bits, AES-128 (revisions 2 to 4) and AES-256 (revision 6).
+- **Damaged files repaired** as they're read, as qpdf and MuPDF repair them: when the
+  cross-reference doesn't lead to the objects (a file cut short, offsets that are off, a
+  `startxref` pointing nowhere, a table that can't be read), it's rebuilt by scanning the file for
+  them, objects in object streams included, and the trailer pieced together from what's left of
+  it (the catalog found by its `/Type` when no trailer names it); `reader::repaired()` says so. A
+  page tree that can't be read gives the pages in the order they're in the file. A stream whose
+  `/Length` is wrong is read up to its `endstream`. What can't be repaired throws
+  `std::runtime_error`: no catalog or pages left, or an RC4 or AES-128 file whose trailer (and
+  with it the file's `/ID`, which their key is made from) is lost.
 - **Merging** (`pdflite/merge.h`, `sc::pdflite::merge()`): the pages of several PDFs, in order, in
   a new file, which may be one of the inputs. Each page comes as it was (content, resources,
   annotations, links to pages of its own file); the first file's title, bookmarks and named
