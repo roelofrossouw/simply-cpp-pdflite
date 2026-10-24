@@ -26,6 +26,9 @@
 #include <vector>
 
 namespace sc::pdflite {
+    // This sc-pdflite's version ("4.6.0"), from its release tag: what it writes in Producer.
+    [[nodiscard]] std::string_view version();
+
     // A PDF document: pages, each of its own size (the document's unless add_page() gives one),
     // each with a content stream and the fonts, pictures and graphics states it uses; links,
     // bookmarks and the document's information. The file is created at once and finished by
@@ -113,7 +116,8 @@ namespace sc::pdflite {
 
         // An entry of the document information dictionary (14.3.3), UTF-8: "Title", "Author",
         // "Subject", "Keywords", "Creator", "Producer" or a key of one's own. CreationDate and
-        // ModDate are set by close(), and Producer when it isn't given; Trapped isn't written.
+        // ModDate are set by close(), and Producer when it isn't given ("simply-cpp-pdflite 4.6.0",
+        // with version()); Trapped isn't written.
         // Throws std::invalid_argument for those three keys or an empty one.
         void info(std::string_view key, std::string_view value);
 

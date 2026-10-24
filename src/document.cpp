@@ -36,6 +36,8 @@ namespace sc::pdflite {
         }
     }
 
+    std::string_view version() { return SC_PDFLITE_VERSION; }
+
     document::document(const std::filesystem::path &path, const sc::size_<sc::distance> &size)
         : file_(checked(path, size.width(), size.height())), width_(size.width()), height_(size.height()) {
         pages_id_ = file_.allocate();
@@ -344,7 +346,7 @@ namespace sc::pdflite {
         file_.write(catalog, root);
 
         const auto now = string::date(std::chrono::system_clock::now());
-        if (!info_.contains("Producer")) info_.insert_or_assign("Producer", string::text("simply-cpp-pdflite"));
+        if (!info_.contains("Producer")) info_.insert_or_assign("Producer", string::text("simply-cpp-pdflite " + std::string{version()}));
         dictionary information;
         for (const auto &[key, value]: info_) information.add(key, value);
         information.add("CreationDate", now).add("ModDate", now);
