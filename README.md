@@ -32,6 +32,10 @@ What it writes so far:
   palette, at any bit depth) is copied as it is, with PNG's own predictors; any other is decoded
   with zlib (interlacing undone) and its transparency (an alpha channel, a palette's alphas or a
   key colour) written as a soft mask. Each chunk's CRC and order are checked.
+- **Each picture written once**: copies of one, and pictures read from the same bytes (a logo loaded
+  for every page), share one image. `document::image_resolution(150)` writes PNGs at most about
+  150 pixels an inch where they're shown (given with `image(picture, shown)`): one with more than
+  1.5 times that is scaled down (`png::reduced()`, an area average), as Ghostscript does.
 - **SVG drawings** (`pdflite/svg.h`), read by sc-graphics (`sc::drawing`) and written as a form:
   vectors, sharp at any size, placed like a picture. Strokes, fills (nonzero or even-odd), clips,
   transparency, text in the built-in fonts and the PNGs or JPEGs in it.

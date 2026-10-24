@@ -14,7 +14,7 @@
 namespace sc::pdflite {
     namespace {
         // Text in WinAnsiEncoding, a character it doesn't have as '?'.
-        std::string encoded(const std::string &utf8) {
+        std::string win_ansi_text(const std::string &utf8) {
             std::string out;
             for (const char32_t code: code_points(utf8)) out += sc::standard_font::encode(code).value_or('?');
             return out;
@@ -104,7 +104,7 @@ namespace sc::pdflite {
                 page.begin_text();
                 page.font(used.font(face_of(text->text.font)), text->text.font.size);
                 page.text_position(text->text.position.x(), text->text.position.y());
-                page.show(encoded(text->text.content));
+                page.show(win_ansi_text(text->text.content));
                 page.end_text();
                 page.restore();
             } else if (const auto *figure = std::get_if<sc::figure>(&item)) {

@@ -85,9 +85,20 @@ namespace sc::pdflite {
 
         // The resource name ("Im1") of picture (a jpeg, png or svg) in the current page's
         // resources, adding it there (and to the file, once) the first time; draw it with
-        // content::draw(). The same picture (or a copy of it) used again, on any page, is written
-        // once.
+        // content::draw(). The same picture used again, on any page, is written once: a copy of
+        // it, or another read from the same bytes.
         std::string image(const pdflite::image &picture);
+
+        // The same, for picture drawn shown big (on the page, its unit square's sides), which
+        // image_resolution() goes by.
+        std::string image(const pdflite::image &picture, const sc::size_<sc::distance> &shown);
+
+        // Writes PNGs at most about pixels_per_inch where they're shown: one with more than 1.5
+        // times that at its biggest showing (image() with its size) is scaled down to it
+        // (png::reduced()), once, for every page. One also drawn without its size, a JPEG and an
+        // SVG are written as they are. 0, the default, keeps every picture as it is. Throws
+        // std::invalid_argument for a negative or non-finite resolution.
+        void image_resolution(double pixels_per_inch);
 
         // The resource name ("GS1") of a graphics state (8.4.5, an ExtGState) that paints fills and
         // text at fill_alpha and strokes at stroke_alpha (0 transparent to 1 opaque), in the current
@@ -180,8 +191,18 @@ namespace sc::pdflite {
         struct written_image {
             std::shared_ptr<const pdflite::image> picture; // held, so its identity stays unique
             std::uint32_t id;
+            double widest = 0, tallest = 0; // the biggest it's shown, in points
+            bool unsized = false;           // drawn somewhere without its size
         };
         std::map<const void *, written_image> images_; // by the picture's identity, which copies share
+        std::map<std::string_view, const void *> encoded_images_; // a picture's bytes (in images_): its identity there
+        double image_resolution_ = 0; // pixels per inch; 0 keeps pictures as they are
+
+        // image()'s work: shown, when it's known, counts towards its resolution.
+        std::string placed(const pdflite::image &picture, const std::optional<sc::size_<sc::distance>> &shown);
+
+        // The picture as close() writes it: scaled down to the resolution when it's that much bigger.
+        [[nodiscard]] std::shared_ptr<const pdflite::image> as_written(const written_image &written) const;
         struct written_font {
             pdflite::font embedded; // held: copies share its glyphs
             std::uint32_t id;
