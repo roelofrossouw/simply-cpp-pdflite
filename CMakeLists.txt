@@ -27,6 +27,9 @@ add_sc_object(pdflite
         LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB PkgConfig::freetype2 OpenSSL::Crypto
         PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB OpenSSL::Crypto)
 
+# version(), and the Producer files are written with by default.
+target_compile_definitions(sc-obj-pdflite PRIVATE SC_PDFLITE_VERSION="${SC_VERSION}")
+
 add_sc_libraries(DESCRIPTION "simply-cpp-pdflite")
 
 install_sc_module(PATH_VARS CMAKE_INSTALL_INCLUDEDIR)

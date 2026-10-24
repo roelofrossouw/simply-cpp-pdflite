@@ -225,7 +225,8 @@ int main() {
         CHECK(contains(file, "/BaseFont /Times-BoldItalic /Encoding /WinAnsiEncoding"));
         CHECK(contains(file, "/Title <FEFF"));
         CHECK(contains(file, "/Author (simply-cpp)"));
-        CHECK(contains(file, "/Producer (simply-cpp-pdflite)"));
+        CHECK(contains(file, "/Producer (simply-cpp-pdflite " + std::string{version()} + ")"));
+        CHECK(!version().empty() && version().find('.') != std::string_view::npos);
         CHECK(contains(file, "/CreationDate (D:"));
         const auto streams = inflated_streams(file);
         CHECK(contains(streams, "/F1 14 Tf"));
