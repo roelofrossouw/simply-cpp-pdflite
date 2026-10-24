@@ -50,8 +50,20 @@ namespace sc::pdflite {
 
         [[nodiscard]] const void *identity() const override { return data_.get(); }
 
+        [[nodiscard]] std::string_view encoded() const override;
+
+        // A PNG of pixels made from it: each new pixel the average of the ones it covers (colours
+        // weighted by their alpha), at 8 bits, grey or RGB, an alpha channel only when some pixel
+        // is see-through. Throws std::invalid_argument for a size that's empty or bigger than it.
+        [[nodiscard]] std::shared_ptr<const image> reduced(const sc::size &pixels) const override;
+
     private:
         struct data;
+        struct pixels;
+
+        // Every pixel's colour (grey or RGB) and alpha at 8 bits, row by row.
+        [[nodiscard]] pixels decoded() const;
+
         std::shared_ptr<const data> data_;
     };
 }

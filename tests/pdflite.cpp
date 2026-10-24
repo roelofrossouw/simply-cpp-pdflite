@@ -536,6 +536,77 @@ int main() {
         CHECK_THROWS_AS(png::load(output() / "no-such.png"), std::runtime_error);
     }
 
+    SECTION("Pictures read from the same bytes are written once; PNGs reduced to a resolution");
+    {
+        const fs::path folder = SC_PDFLITE_TEST_PNGS;
+        const auto count_images = [](const std::string &file) {
+            std::size_t images = 0;
+            for (auto at = file.find("/Subtype /Image"); at != std::string::npos; at = file.find("/Subtype /Image", at + 1)) ++images;
+            return images;
+        };
+
+        // Two loads of one file aren't copies, but their bytes are the same: one image.
+        const auto same_file = output() / "same-bytes.pdf";
+        {
+            document pdf{same_file, sc::page_size::A4};
+            const auto first = png::load(folder / "rgb8.png"), second = png::load(folder / "rgb8.png");
+            CHECK(first.identity() != second.identity());
+            CHECK_EQ(pdf.image(first), std::string{"Im1"});
+            CHECK_EQ(pdf.image(second), std::string{"Im1"});
+            pdf.page_content().draw("Im1", sc::rect{20, 20, 70, 50});
+            pdf.add_page();
+            pdf.page_content().draw(pdf.image(png::load(folder / "rgb8.png")), sc::rect{20, 20, 70, 50});
+            pdf.page_content().draw(pdf.image(jpeg::load(SC_PDFLITE_TEST_PHOTO)), sc::rect{20, 100, 96, 64});
+            pdf.close();
+        }
+        CHECK_EQ(count_images(read(same_file)), std::size_t{2});
+
+        // reduced(): the same size gives the same pixels; one pixel is their average.
+        const auto rgba = png::load(folder / "rgba8.png");
+        const auto same = std::dynamic_pointer_cast<const png>(rgba.reduced({7, 5}));
+        CHECK(same && same->colour_type() == 6 && same->bit_depth() == 8);
+        const auto one = std::dynamic_pointer_cast<const png>(png::load(folder / "rgb8.png").reduced({1, 1}));
+        CHECK(one && one->colour_type() == 2 && one->size().width() == 1); // opaque: no alpha channel
+        CHECK_THROWS_AS((void) rgba.reduced({8, 5}), std::invalid_argument);
+        CHECK_THROWS_AS((void) rgba.reduced({0, 5}), std::invalid_argument);
+        CHECK(!jpeg::load(SC_PDFLITE_TEST_PHOTO).reduced({10, 10}));
+
+        const auto reduced_file = output() / "reduced.pdf";
+        {
+            document pdf{reduced_file, sc::page_size::A4};
+            CHECK_THROWS_AS(pdf.image_resolution(-1), std::invalid_argument);
+            pdf.image_resolution(72); // a pixel a point
+            auto &page = pdf.page_content();
+            // rgba8, 7 by 5, shown 7 by 5 points: kept. rgb8 shown 2 by 2 at most: 3 by 2 pixels.
+            page.draw(pdf.image(rgba, sc::size_<sc::distance>{7, 5}), sc::rect{20, 20, 7, 5});
+            const auto small = png::load(folder / "rgb8.png");
+            page.draw(pdf.image(small, sc::size_<sc::distance>{1, 1}), sc::rect{20, 40, 1, 1});
+            page.draw(pdf.image(small, sc::size_<sc::distance>{2, 2}), sc::rect{20, 60, 2, 2});
+            // grey4 drawn once without its size: kept.
+            const auto grey = png::load(folder / "grey4.png");
+            page.draw(pdf.image(grey, sc::size_<sc::distance>{1, 1}), sc::rect{20, 80, 1, 1});
+            page.draw(pdf.image(grey), sc::rect{20, 90, 1, 1});
+            pdf.close();
+        }
+        {
+            const auto file = read(reduced_file);
+            CHECK(structure_problem(file).empty());
+            CHECK_EQ(count_images(file), std::size_t{4}); // rgba8's soft mask too
+            CHECK(contains(file, "/Width 3 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /DecodeParms << /Predictor 15 /Colors 3"));
+            CHECK(contains(file, "/Width 7 /Height 5 /ColorSpace /DeviceGray /BitsPerComponent 4"));
+            const auto streams = inflated_streams(file);
+            // rgba8 at its own size: its colours and alphas as they were.
+            std::string colours, alphas;
+            for (int y = 0; y < 5; ++y)
+                for (int x = 0; x < 7; ++x) {
+                    for (const int v: {x * 30 % 256, y * 50 % 256, (x + y) * 10 % 256}) colours += static_cast<char>(v);
+                    alphas += static_cast<char>((x * y * 13 + 40) % 256);
+                }
+            CHECK(contains(streams, colours));
+            CHECK(contains(streams, alphas));
+        }
+    }
+
     SECTION("SVG: a form of vectors, placed like a picture");
     const auto svg_file = output() / "svg.pdf";
     {

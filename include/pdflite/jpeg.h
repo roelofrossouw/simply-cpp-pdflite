@@ -41,6 +41,8 @@ namespace sc::pdflite {
 
         [[nodiscard]] const void *identity() const override { return bytes_.get(); }
 
+        [[nodiscard]] std::string_view encoded() const override { return *bytes_; }
+
     private:
         std::shared_ptr<const std::string> bytes_;
         int width_ = 0, height_ = 0, components_ = 0;

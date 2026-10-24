@@ -4,7 +4,9 @@
 
 #include <zlib.h>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -20,6 +22,13 @@ namespace sc::pdflite {
         std::string palette;     // PLTE: RGB triples
         std::string transparency; // tRNS: a palette's alphas, or the key colour
         std::string compressed;  // the IDAT chunks' data, joined
+        std::string bytes;       // the file's
+    };
+
+    struct png::pixels {
+        bool colour = false;  // RGB, else grey
+        std::string colours;  // 3 or 1 bytes a pixel
+        std::string alphas;   // 1 a pixel
     };
 
     namespace {
@@ -56,6 +65,51 @@ namespace sc::pdflite {
         int paeth(const int a, const int b, const int c) {
             const int p = a + b - c, pa = std::abs(p - a), pb = std::abs(p - b), pc = std::abs(p - c);
             return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+        }
+
+        void put_word(std::string &out, const std::uint32_t value) {
+            for (const int shift: {24, 16, 8, 0}) out += static_cast<char>(value >> shift & 0xFF);
+        }
+
+        void put_chunk(std::string &out, const std::string_view type, const std::string_view body) {
+            put_word(out, static_cast<std::uint32_t>(body.size()));
+            const std::size_t start = out.size();
+            out.append(type).append(body);
+            put_word(out, static_cast<std::uint32_t>(crc32(crc32(0, nullptr, 0), reinterpret_cast<const Bytef *>(out.data() + start), out.size() - start)));
+        }
+
+        // A PNG of 8-bit samples, channels a pixel (1 grey, 2 grey and alpha, 3 RGB, 4 RGBA), each
+        // row filtered with Paeth.
+        std::string encoded_png(const std::uint32_t width, const std::uint32_t height, const int samples, const std::string &interleaved) {
+            const std::size_t length = static_cast<std::size_t>(width) * samples;
+            std::string filtered;
+            filtered.reserve((length + 1) * height);
+            for (std::uint32_t y = 0; y < height; ++y) {
+                filtered += '\x04';
+                const auto *row = reinterpret_cast<const unsigned char *>(interleaved.data()) + y * length;
+                const auto *above = y ? row - length : nullptr;
+                for (std::size_t i = 0; i < length; ++i) {
+                    const int left = i >= static_cast<std::size_t>(samples) ? row[i - samples] : 0, up = above ? above[i] : 0;
+                    const int corner = above && i >= static_cast<std::size_t>(samples) ? above[i - samples] : 0;
+                    filtered += static_cast<char>(row[i] - paeth(left, up, corner));
+                }
+            }
+            uLongf size = compressBound(filtered.size());
+            std::string deflated(size, '\0');
+            if (compress2(reinterpret_cast<Bytef *>(deflated.data()), &size, reinterpret_cast<const Bytef *>(filtered.data()), filtered.size(), 9) != Z_OK)
+                throw std::runtime_error("sc::pdflite: can't compress a PNG's image data");
+            deflated.resize(size);
+
+            std::string header;
+            put_word(header, width);
+            put_word(header, height);
+            const int type = samples == 1 ? 0 : samples == 2 ? 4 : samples == 3 ? 2 : 6;
+            header += {'\x08', static_cast<char>(type), '\0', '\0', '\0'};
+            std::string out = "\x89PNG\r\n\x1A\n";
+            put_chunk(out, "IHDR", header);
+            put_chunk(out, "IDAT", deflated);
+            put_chunk(out, "IEND", {});
+            return out;
         }
     }
 
@@ -120,6 +174,7 @@ namespace sc::pdflite {
         }
         if (parsed->type == 3 && parsed->palette.empty()) bad("with a palette's colour type but no PLTE");
         if (parsed->compressed.empty()) bad("without image data (IDAT)");
+        parsed->bytes = std::move(bytes);
         data_ = std::move(parsed);
     }
 
@@ -133,23 +188,11 @@ namespace sc::pdflite {
 
     bool png::transparent() const { return data_->type == 4 || data_->type == 6 || !data_->transparency.empty(); }
 
-    void png::write(file &out, const std::uint32_t id) const {
+    std::string_view png::encoded() const { return data_->bytes; }
+
+    png::pixels png::decoded() const {
         const data &d = *data_;
-        dictionary entries{{"Type", name{"XObject"}}, {"Subtype", name{"Image"}}, {"Width", d.width}, {"Height", d.height}};
-
-        if (copied()) {
-            // The data as it is: FlateDecode, undoing PNG's per-row filters with predictor 15.
-            const int colours = d.type == 2 ? 3 : 1;
-            // A palette: the colours' indices into it (8.6.6.3).
-            if (d.type == 3) entries.add("ColorSpace", array{name{"Indexed"}, name{"DeviceRGB"}, d.palette.size() / 3 - 1, string{d.palette, true}});
-            else entries.add("ColorSpace", name{d.type == 2 ? "DeviceRGB" : "DeviceGray"});
-            entries.add("BitsPerComponent", d.depth).add("Filter", name{"FlateDecode"});
-            entries.add("DecodeParms", dictionary{{"Predictor", 15}, {"Colors", colours}, {"BitsPerComponent", d.depth}, {"Columns", d.width}});
-            out.write_stream(id, entries, d.compressed, false);
-            return;
-        }
-
-        // Decoded: the rows of each pass, unfiltered, then every pixel's colour and alpha at 8 bits.
+        // The rows of each pass, unfiltered, then every pixel's colour and alpha at 8 bits.
         const int samples = channels(d.type);
         const int bits_per_pixel = samples * d.depth;
         const std::size_t step = std::max(1, bits_per_pixel / 8); // the filters' "bpp"
@@ -229,7 +272,68 @@ namespace sc::pdflite {
                 previous = row;
             }
         }
+        return {colour, std::move(colours), std::move(alphas)};
+    }
 
+    std::shared_ptr<const image> png::reduced(const sc::size &pixels) const {
+        const data &d = *data_;
+        const auto width = static_cast<std::uint32_t>(pixels.width()), height = static_cast<std::uint32_t>(pixels.height());
+        if (width == 0 || height == 0 || width > d.width || height > d.height) throw std::invalid_argument("sc::pdflite: a PNG reduced to a size it can't be");
+        const auto [colour, colours, alphas] = decoded();
+        const int channels = colour ? 3 : 1;
+        const bool see_through = std::ranges::any_of(alphas, [](const char a) { return static_cast<unsigned char>(a) != 0xFF; });
+        const int samples = channels + (see_through ? 1 : 0);
+
+        // Each new pixel covers [x0, x1) by [y0, y1) of the old ones, partly at the edges: an
+        // area-weighted average, colours weighted by alpha too so see-through pixels don't tint.
+        const double sx = static_cast<double>(d.width) / width, sy = static_cast<double>(d.height) / height;
+        const auto *colour_at = reinterpret_cast<const unsigned char *>(colours.data());
+        const auto *alpha_at = reinterpret_cast<const unsigned char *>(alphas.data());
+        std::string out(static_cast<std::size_t>(width) * height * samples, '\0');
+        std::vector<double> sums(channels);
+        for (std::uint32_t y = 0; y < height; ++y) {
+            const double top = y * sy, bottom = (y + 1) * sy;
+            for (std::uint32_t x = 0; x < width; ++x) {
+                const double left = x * sx, right = (x + 1) * sx;
+                std::ranges::fill(sums, 0.0);
+                double area = 0, opacity = 0;
+                for (auto row = static_cast<std::uint32_t>(top); row < d.height && row < bottom; ++row) {
+                    const double tall = std::min<double>(row + 1, bottom) - std::max<double>(row, top);
+                    for (auto column = static_cast<std::uint32_t>(left); column < d.width && column < right; ++column) {
+                        const double weight = tall * (std::min<double>(column + 1, right) - std::max<double>(column, left));
+                        const std::size_t at = static_cast<std::size_t>(row) * d.width + column;
+                        const double alpha = alpha_at[at] / 255.0;
+                        for (int c = 0; c < channels; ++c) sums[c] += weight * alpha * colour_at[at * channels + c];
+                        area += weight;
+                        opacity += weight * alpha;
+                    }
+                }
+                const std::size_t at = (static_cast<std::size_t>(y) * width + x) * samples;
+                for (int c = 0; c < channels; ++c)
+                    out[at + c] = static_cast<char>(opacity > 0 ? std::lround(std::clamp(sums[c] / opacity, 0.0, 255.0)) : 0);
+                if (see_through) out[at + channels] = static_cast<char>(std::lround(std::clamp(opacity / area * 255, 0.0, 255.0)));
+            }
+        }
+        return std::make_shared<png>(encoded_png(width, height, samples, out));
+    }
+
+    void png::write(file &out, const std::uint32_t id) const {
+        const data &d = *data_;
+        dictionary entries{{"Type", name{"XObject"}}, {"Subtype", name{"Image"}}, {"Width", d.width}, {"Height", d.height}};
+
+        if (copied()) {
+            // The data as it is: FlateDecode, undoing PNG's per-row filters with predictor 15.
+            const int colours = d.type == 2 ? 3 : 1;
+            // A palette: the colours' indices into it (8.6.6.3).
+            if (d.type == 3) entries.add("ColorSpace", array{name{"Indexed"}, name{"DeviceRGB"}, d.palette.size() / 3 - 1, string{d.palette, true}});
+            else entries.add("ColorSpace", name{d.type == 2 ? "DeviceRGB" : "DeviceGray"});
+            entries.add("BitsPerComponent", d.depth).add("Filter", name{"FlateDecode"});
+            entries.add("DecodeParms", dictionary{{"Predictor", 15}, {"Colors", colours}, {"BitsPerComponent", d.depth}, {"Columns", d.width}});
+            out.write_stream(id, entries, d.compressed, false);
+            return;
+        }
+
+        const auto [colour, colours, alphas] = decoded();
         entries.add("ColorSpace", name{colour ? "DeviceRGB" : "DeviceGray"}).add("BitsPerComponent", 8);
         if (transparent()) {
             // The alpha as a soft mask: a grey image of its own (11.6.5.3).

@@ -131,12 +131,50 @@ namespace sc::pdflite {
         return page_name(page.states, key, [&] { if (!states_.contains(key)) states_[key] = file_.allocate(); }, "GS", page.states.size() + 1);
     }
 
-    std::string document::image(const pdflite::image &picture) {
+    std::string document::image(const pdflite::image &picture) { return placed(picture, std::nullopt); }
+
+    std::string document::image(const pdflite::image &picture, const sc::size_<sc::distance> &shown) { return placed(picture, shown); }
+
+    std::string document::placed(const pdflite::image &picture, const std::optional<sc::size_<sc::distance>> &shown) {
         check_open();
         const void *key = picture.identity();
+        if (!images_.contains(key)) {
+            // Another picture of the same bytes is that one; else it's written as itself.
+            const auto bytes = picture.encoded();
+            if (const auto same = bytes.empty() ? encoded_images_.end() : encoded_images_.find(bytes); same != encoded_images_.end()) {
+                key = same->second;
+            } else {
+                const auto &written = images_.emplace(key, written_image{picture.clone(), file_.allocate()}).first->second;
+                if (!bytes.empty()) encoded_images_.emplace(written.picture->encoded(), key); // the held copy's bytes, which stay
+            }
+        }
+        auto &written = images_.at(key);
+        if (shown) {
+            written.widest = std::max(written.widest, std::abs(shown->width().points()));
+            written.tallest = std::max(written.tallest, std::abs(shown->height().points()));
+        } else {
+            written.unsized = true;
+        }
         auto &page = pages_[current_];
-        return page_name(page.images, key, [&] { if (!images_.contains(key)) images_.emplace(key, written_image{picture.clone(), file_.allocate()}); },
-                         picture.prefix(), page.images.size() + 1);
+        return page_name(page.images, key, [] {}, picture.prefix(), page.images.size() + 1);
+    }
+
+    void document::image_resolution(const double pixels_per_inch) {
+        if (!std::isfinite(pixels_per_inch) || pixels_per_inch < 0) throw std::invalid_argument("sc::pdflite: an image resolution that's negative or not finite");
+        image_resolution_ = pixels_per_inch;
+    }
+
+    std::shared_ptr<const pdflite::image> document::as_written(const written_image &written) const {
+        if (image_resolution_ <= 0 || written.unsized || written.widest <= 0 || written.tallest <= 0) return written.picture;
+        const auto natural = written.picture->size();
+        if (natural.width() <= 0 || natural.height() <= 0) return written.picture;
+        const double inches_per_point = 1 / sc::distance::points_per_inch;
+        const double fraction = std::max(written.widest * inches_per_point * image_resolution_ / natural.width(),
+                                         written.tallest * inches_per_point * image_resolution_ / natural.height());
+        if (fraction * 1.5 >= 1) return written.picture;
+        const sc::size pixels{std::max(1.0, std::ceil(natural.width() * fraction)), std::max(1.0, std::ceil(natural.height() * fraction))};
+        if (auto smaller = written.picture->reduced(pixels)) return smaller;
+        return written.picture;
     }
 
     std::optional<std::string> document::win_ansi(const std::string_view utf8) {
@@ -292,7 +330,7 @@ namespace sc::pdflite {
         for (const auto &[alphas, id]: states_)
             file_.write(id, dictionary{{"Type", name{"ExtGState"}}, {"ca", alphas.first}, {"CA", alphas.second}});
 
-        for (const auto &[key, written]: images_) written.picture->write(file_, written.id);
+        for (const auto &[key, written]: images_) as_written(written)->write(file_, written.id);
         // Last: the subsets hold every glyph the pages used.
         for (const auto &[key, written]: embedded_) written.embedded.write(file_, written.id);
 
