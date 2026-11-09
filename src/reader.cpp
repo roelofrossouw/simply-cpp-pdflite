@@ -10,6 +10,7 @@
 #include <cerrno>
 #include <cmath>
 #include <cstdlib>
+#include <deque>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -528,7 +529,10 @@ namespace sc::pdflite {
         std::vector<dictionary> inherited; // per page: what it inherits
 
         mutable std::unordered_map<std::uint32_t, object> objects;
-        mutable std::unordered_map<std::uint32_t, pdflite::stream> streams;
+        mutable std::unordered_map<std::uint32_t, pdflite::stream> streams; // data: a view of bytes, or of decrypted_streams
+        // An encrypted file's streams, decrypted. Only added to, never cleared or replaced (not even
+        // when a repair reads them again): a stream() handed out views its data here.
+        mutable std::deque<std::string> decrypted_streams;
         mutable std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> object_stream_offsets; // per object stream
         mutable std::unordered_map<std::uint32_t, std::string> object_stream_data;
         mutable std::set<std::uint32_t> reading; // objects being read: a /Length that refers back to its own stream
@@ -626,7 +630,7 @@ namespace sc::pdflite {
 
         // A cross-reference stream (7.5.8): its entries noted, its dictionary returned.
         dictionary read_stream_section(const std::uint64_t offset) {
-            const auto [unused, value, data, end] = indirect_at(base + offset, 0, false);
+            const auto [unused, value, data, unused_plain, end] = indirect_at(base + offset, 0, false);
             if (!value.is<dictionary>() || !data) damaged("a cross-reference offset that leads to neither a table nor a stream");
             const auto &entries = value.as<dictionary>();
             const auto *type = entries.find("Type");
@@ -687,8 +691,9 @@ namespace sc::pdflite {
         struct indirect {
             std::uint32_t id;
             object value;
-            std::optional<std::string> stream_data; // raw, as in the file
-            std::size_t end = 0;                    // just after it (its endstream or the object)
+            std::optional<std::string_view> stream_data; // raw, as in the file (a view of bytes)
+            std::optional<std::string> decrypted_data;   // its data decrypted, for an encrypted file's stream
+            std::size_t end = 0;                         // just after it (its endstream or the object)
         };
 
         // The indirect object at a position: "12 0 obj ... endobj", a stream's data with it.
@@ -703,7 +708,8 @@ namespace sc::pdflite {
             if (expected != 0 && *id != expected)
                 damaged("the cross-reference leads to object " + std::to_string(*id) + " where " + std::to_string(expected) + " should be");
             object value = p.value();
-            std::optional<std::string> data;
+            std::optional<std::string_view> data;
+            std::optional<std::string> plain;
             if (value.is<dictionary>() && p.peek_word() == "stream") {
                 // The data starts after "stream" and its end of line: CR LF or LF (a lone CR is
                 // taken too).
@@ -732,7 +738,7 @@ namespace sc::pdflite {
                     if (stop > start && bytes[stop - 1] == '\r') --stop;
                     size = stop - start;
                 }
-                data = bytes.substr(start, *size);
+                data = std::string_view{bytes}.substr(start, *size);
                 p.seek(static_cast<std::size_t>(start + *size));
                 p.take("endstream");
             }
@@ -746,10 +752,10 @@ namespace sc::pdflite {
                     const auto *type = entries.find("Type");
                     const std::string kind = type && type->is<name>() ? type->as<name>().text() : "";
                     if (kind != "XRef" && !(kind == "Metadata" && !security->metadata))
-                        data = security->decrypt(*data, security->streams, static_cast<std::uint32_t>(*id), gen);
+                        plain = security->decrypt(*data, security->streams, static_cast<std::uint32_t>(*id), gen);
                 }
             }
-            return {static_cast<std::uint32_t>(*id), std::move(value), std::move(data), end};
+            return {static_cast<std::uint32_t>(*id), std::move(value), data, std::move(plain), end};
         }
 
         object decrypted(const object &value, const std::uint32_t id, const std::uint32_t generation) const {
@@ -795,7 +801,13 @@ namespace sc::pdflite {
             const entry &where = table[id];
             if (where.type == entry::kind::at) {
                 auto read = indirect_at(base + where.offset, id, true);
-                if (read.stream_data) streams.emplace(id, pdflite::stream{read.value.as<dictionary>(), std::move(*read.stream_data)});
+                if (read.decrypted_data) {
+                    // Kept where it doesn't move (a deque's push_back leaves the others where they are).
+                    const auto &kept = decrypted_streams.emplace_back(std::move(*read.decrypted_data));
+                    streams.emplace(id, pdflite::stream{read.value.as<dictionary>(), kept});
+                } else if (read.stream_data) {
+                    streams.emplace(id, pdflite::stream{read.value.as<dictionary>(), *read.stream_data});
+                }
                 return objects.emplace(id, std::move(read.value)).first->second;
             }
             return objects.emplace(id, compressed(id, static_cast<std::uint32_t>(where.offset), where.generation)).first->second;
@@ -831,7 +843,7 @@ namespace sc::pdflite {
 
         object resolve(const object &value) const { return value.is<reference>() ? get(value.as<reference>().id) : value; }
 
-        std::string decode(const dictionary &entries, const std::string &data) const {
+        std::string decode(const dictionary &entries, const std::string_view data) const {
             const object filters = resolve(entries.find("Filter") ? *entries.find("Filter") : object{});
             const object parameters = resolve(entries.find("DecodeParms") ? *entries.find("DecodeParms") : object{});
             std::vector<std::string> names;
@@ -851,7 +863,7 @@ namespace sc::pdflite {
                     settings.push_back(std::move(these));
                 }
             }
-            std::string out = data;
+            std::string out{data};
             for (std::size_t i = 0; i < names.size(); ++i) {
                 if (names[i] == "FlateDecode" || names[i] == "Fl") {
                     out = unpredicted(inflate_data(out), settings[i]);
@@ -1150,10 +1162,14 @@ namespace sc::pdflite {
     reader::reader(std::shared_ptr<impl> state) : impl_(std::move(state)) {}
 
     reader::reader(const std::filesystem::path &file, const std::string_view password) {
-        std::ifstream in{file, std::ios::binary};
+        // Read in one go: sized first, then a single read (not a character at a time).
+        std::ifstream in{file, std::ios::binary | std::ios::ate};
         if (!in) throw std::runtime_error("sc::pdflite: can't read " + file.string());
-        std::string bytes{std::istreambuf_iterator<char>{in}, {}};
-        if (in.bad()) throw std::runtime_error("sc::pdflite: can't read " + file.string());
+        const std::streamoff size = in.tellg();
+        if (size < 0) throw std::runtime_error("sc::pdflite: can't read " + file.string());
+        std::string bytes(static_cast<std::size_t>(size), '\0');
+        in.seekg(0);
+        if (!in.read(bytes.data(), size) || in.gcount() != size) throw std::runtime_error("sc::pdflite: can't read " + file.string());
         impl_ = opened(std::move(bytes), password);
     }
 

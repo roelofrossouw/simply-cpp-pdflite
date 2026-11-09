@@ -604,6 +604,11 @@ fields (their widgets still show), tagged structure and document-level metadata.
 files written by others too (`tests/resource/pdf`: qpdf's cross-reference streams, object
 streams, linearized output and every kind of encryption, macOS's Quartz, MuPDF).
 
+Streams are copied as they're encoded, never decoded, and without copying them in memory: a
+reader reads its file in one go, and a stream's data (`pdf.stream(12)->data`) is a view of the
+reader's memory, valid while the reader is (an encrypted file's streams are decrypted once and
+kept). A merge needs about as much memory as its inputs' size.
+
 ## Checking the files
 
 Its tests check the files they write byte by byte (every cross-reference entry points at its

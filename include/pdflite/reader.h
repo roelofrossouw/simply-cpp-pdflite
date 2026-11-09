@@ -22,10 +22,12 @@
 // order they're in the file.
 namespace sc::pdflite {
     // A stream as the file holds it: its dictionary and its data, decrypted but still encoded by
-    // its filters (/Filter), so it can be written again as it is.
+    // its filters (/Filter), so it can be written again as it is. data is a view of the reader's
+    // memory, not a copy (the file's own bytes, or the decrypted ones of an encrypted file): it's
+    // valid while the reader it came from (or a copy of it) is.
     struct stream {
         pdflite::dictionary entries;
-        std::string data;
+        std::string_view data;
     };
 
     class reader {
@@ -59,6 +61,7 @@ namespace sc::pdflite {
         // Whether object id is a stream, and the stream.
         [[nodiscard]] bool is_stream(std::uint32_t id) const;
 
+        // Its data is a view of the reader's memory (see pdflite::stream): copying it out costs nothing.
         [[nodiscard]] std::optional<pdflite::stream> stream(std::uint32_t id) const;
 
         // value, or what it refers to when it's a reference.

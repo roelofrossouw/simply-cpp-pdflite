@@ -76,15 +76,20 @@ namespace sc::pdflite {
         if (entries.contains("Length")) throw std::invalid_argument("sc::pdflite: a stream's /Length is written for it");
         if (compress && entries.contains("Filter"))
             throw std::invalid_argument("sc::pdflite: a compressed stream's /Filter is written for it");
-        std::string packed = compress ? deflate(data) : std::string{data};
-        if (encryption_ && id != exempt_) packed = encryption_->encrypt(packed); // after the filters, as readers undo it first
-        entries.add("Length", packed.size());
+        // Only what's made here is held: data compressed or encrypted (encryption after the filters,
+        // as readers undo it first). Data written as it is goes straight to the file, not copied.
+        const bool encrypting = encryption_ && id != exempt_;
+        std::string packed;
+        if (compress) packed = deflate(data);
+        if (encrypting) packed = encryption_->encrypt(compress ? std::string_view{packed} : data);
+        const std::string_view body = compress || encrypting ? std::string_view{packed} : data;
+        entries.add("Length", body.size());
         if (compress) entries.add("Filter", name{"FlateDecode"});
         const std::string head = sealed(entries, id).write();
         start(id);
         put(head);
         put("\nstream\n"); // the end of line after "stream" is a line feed, never a lone return
-        put(packed);
+        put(body);
         put("\nendstream\nendobj\n");
     }
 
