@@ -2,15 +2,21 @@
 
 #include "pdflite/object.h"
 
+#include <algorithm>
+#include <cmath>
 #include <stdexcept>
 #include <string>
 
 namespace sc::pdflite {
     namespace {
+        // Channels outside 0 to 1 are brought to the nearest end, as CSS does with its colours (a
+        // colour worked out in floating point can land a hair outside: #990000's green came back as
+        // -1.1e-16 from sc-core 2.1.1); one that isn't a number at all is refused, the three named.
         std::string colour(const double red, const double green, const double blue) {
-            for (const double channel: {red, green, blue})
-                if (!(channel >= 0 && channel <= 1)) throw std::invalid_argument("sc::pdflite: a colour channel outside 0 to 1");
-            return number(red) + " " + number(green) + " " + number(blue);
+            if (!std::isfinite(red) || !std::isfinite(green) || !std::isfinite(blue))
+                throw std::invalid_argument("sc::pdflite: a colour channel that isn't a number (red " + std::to_string(red) + ", green " +
+                                            std::to_string(green) + ", blue " + std::to_string(blue) + ")");
+            return number(std::clamp(red, 0.0, 1.0)) + " " + number(std::clamp(green, 0.0, 1.0)) + " " + number(std::clamp(blue, 0.0, 1.0));
         }
     }
 

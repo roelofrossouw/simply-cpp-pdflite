@@ -30,8 +30,8 @@ namespace sc::pdflite {
         // same mapping in PDF's.
         void transform(double a, double b, double c, double d, sc::distance e, sc::distance f);
         void line_width(sc::distance width);                                       // w
-        void fill_colour(double red, double green, double blue);                   // rg, 0 to 1
-        void stroke_colour(double red, double green, double blue);                 // RG, 0 to 1
+        void fill_colour(double red, double green, double blue);                   // rg, 0 to 1 (beyond: clamped; NaN or infinite: refused)
+        void stroke_colour(double red, double green, double blue);                 // RG, 0 to 1 (likewise)
         void state(std::string_view resource);                                     // gs, a resource name such as "GS1"
 
         // Paths.

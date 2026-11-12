@@ -159,6 +159,17 @@ int main() {
     CHECK_EQ(document::win_ansi("Caf\xC3\xA9 \xE2\x82\xAC").value_or("?"), std::string{"Caf\xE9 \x80"}); // é, €
     CHECK(!document::win_ansi("\xD0\x96")); // Ж isn't in it
 
+    SECTION("Colours: a hair outside 0 to 1 clamped, a channel that isn't a number refused");
+    {
+        content c{842};
+        c.fill_colour(0.6, -1.1e-16, -1.1e-16); // #990000 as sc-core 2.1.1 worked it out
+        c.stroke_colour(1.0000000001, 0.5, 2);
+        CHECK(c.text().find("0.6 0 0 rg") != std::string::npos);
+        CHECK(c.text().find("1 0.5 1 RG") != std::string::npos);
+        CHECK_THROWS_AS(c.fill_colour(std::nan(""), 0, 0), std::invalid_argument);
+        CHECK_THROWS_AS(c.stroke_colour(0, std::numeric_limits<double>::infinity(), 0), std::invalid_argument);
+    }
+
     SECTION("The content stream keeps PDF's rules");
     {
         content c{842};
@@ -179,7 +190,7 @@ int main() {
         c.clip();
         CHECK_THROWS_AS(c.line(5, 5), std::logic_error);        // after W comes the painting operator
         c.end_path();
-        CHECK_THROWS_AS(c.fill_colour(1.5, 0, 0), std::invalid_argument);
+        CHECK_THROWS_AS(c.fill_colour(std::nan(""), 0, 0), std::invalid_argument); // not a number (beyond 0 to 1: clamped since 4.6.3)
         CHECK(c.complete());
         c.save();
         CHECK(!c.complete());
