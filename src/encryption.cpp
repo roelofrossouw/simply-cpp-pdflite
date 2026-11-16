@@ -120,17 +120,22 @@ namespace sc::pdflite {
 
     std::optional<std::string> encryption::key_for(const pdflite::dictionary &encrypt, const std::string_view password) {
         const auto *revision = encrypt.find("R");
-        if (!revision || !revision->is<std::int64_t>() || revision->as<std::int64_t>() != 6)
-            throw std::invalid_argument("sc::pdflite: an encryption dictionary that isn't revision 6");
+        if (!revision || !revision->is<std::int64_t>() || (revision->as<std::int64_t>() != 5 && revision->as<std::int64_t>() != 6))
+            throw std::invalid_argument("sc::pdflite: an encryption dictionary that isn't revision 5 or 6");
+        // Revision 5 (Acrobat 9's, deprecated by ISO 32000-2) hashes once with SHA-256; 6 uses algorithm 2.B.
+        const bool five = revision->as<std::int64_t>() == 5;
+        const auto hashed = [&](const std::string_view pw, const std::string_view salt, const std::string_view user = {}) {
+            return five ? digest(EVP_sha256(), std::string{pw} + std::string{salt} + std::string{user}) : hash(pw, salt, user);
+        };
         const auto bytes = [&](const std::string_view key) { return encrypt.at(key).as<string>().bytes(); };
         const std::string u = bytes("U"), o = bytes("O");
         if (u.size() < 48 || o.size() < 48) throw std::invalid_argument("sc::pdflite: an encryption dictionary with short O or U");
         const auto pw = prepared(password);
         // The owner's first (7.6.4.4.10), then the user's (7.6.4.4.11).
-        if (hash(pw, o.substr(32, 8), u.substr(0, 48)) == o.substr(0, 32))
-            return aes(hash(pw, o.substr(40, 8), u.substr(0, 48)), std::string(16, '\0'), bytes("OE"), false, false);
-        if (hash(pw, u.substr(32, 8)) == u.substr(0, 32))
-            return aes(hash(pw, u.substr(40, 8)), std::string(16, '\0'), bytes("UE"), false, false);
+        if (hashed(pw, o.substr(32, 8), u.substr(0, 48)) == o.substr(0, 32))
+            return aes(hashed(pw, o.substr(40, 8), u.substr(0, 48)), std::string(16, '\0'), bytes("OE"), false, false);
+        if (hashed(pw, u.substr(32, 8)) == u.substr(0, 32))
+            return aes(hashed(pw, u.substr(40, 8)), std::string(16, '\0'), bytes("UE"), false, false);
         return std::nullopt;
     }
 

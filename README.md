@@ -82,7 +82,12 @@ And what it reads (since 4.3.0):
   data goes in as it is (a JPEG isn't recompressed). Other formats (GIF, TIFF, HEIC ...) aren't
   read yet: convert them first.
 - **Passwords for an existing file** (`sc::pdflite::protect()`, or `merge()` with a
-  `protection`): AES-256, whatever the input had.
+  `protection`): AES-256, whatever the input had. `protect()` keeps the whole document (forms,
+  annotations, bookmarks, tagged structure, page labels).
+- **Passwords taken off** (`sc::pdflite::decrypt()`): a file opened with its user or owner
+  password (or none, for an owner password only) and written again unencrypted, the whole document
+  kept; RC4 40/128, AES-128 and AES-256 (revisions 5 and 6). An unencrypted file is copied as it
+  is. A digital signature no longer matches afterwards.
 - **Backgrounds and stamps** (`sc::pdflite::decorate()`): another PDF's pages drawn behind a file's
   pages (a letterhead) or over them (a stamp), its page n on page n and its last on the rest, as
   pdftk's `multibackground` and `multistamp` do (and drawn exactly as pdftk draws them): turned

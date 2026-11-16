@@ -54,8 +54,9 @@ namespace sc::pdflite {
         [[nodiscard]] std::string encrypt(std::string_view data) const;
 
         // Opening a file: the file key a password unlocks in its /Encrypt dictionary's U and UE (the
-        // user password) or O and OE (the owner's), or nullopt for a wrong password. Throws
-        // std::invalid_argument for a dictionary that isn't revision 6.
+        // user password) or O and OE (the owner's), or nullopt for a wrong password. Revision 5
+        // (Acrobat 9's AES-256) opens too. Throws std::invalid_argument for a dictionary that isn't
+        // revision 5 or 6.
         [[nodiscard]] static std::optional<std::string> key_for(const pdflite::dictionary &encrypt, std::string_view password);
 
         // Data encrypt() made, decrypted with the file key; throws std::invalid_argument when it isn't.

@@ -149,6 +149,104 @@ int main() {
         CHECK_THROWS_AS(reader(out / "reader-locked.pdf"), std::runtime_error);
     }
 
+    SECTION("decrypt(): every encryption, by user or owner password; forms, annotations, structure kept; in place");
+    {
+        // The 7-page reports: each page's content as the unencrypted file has it.
+        const reader plain{fixtures / "objstm.pdf"};
+        int n = 0;
+        for (const auto &[file, password]: std::vector<std::pair<string, string>>{
+                 {"rc4-40.pdf", ""}, {"rc4-128.pdf", "user"}, {"rc4-128.pdf", "owner"}, {"aes-128-owner.pdf", ""},
+                 {"aes-256-objstm.pdf", "user"}, {"aes-256-objstm.pdf", "owner"}}) {
+            const auto decrypted = out / ("reader-decrypted-" + std::to_string(++n) + ".pdf");
+            decrypt(fixtures / file, decrypted, password);
+            const reader pdf{decrypted}; // no password
+            CHECK_MSG(!pdf.encrypted(), file);
+            CHECK(!pdf.trailer().contains("Encrypt"));
+            CHECK_EQ(pdf.page_count(), std::size_t{7});
+            for (std::size_t page = 0; page < 7; ++page) {
+                const string mine = page_text(pdf, page), theirs = page_text(plain, page);
+                CHECK_MSG(mine == theirs, file + " page " + std::to_string(page + 1));
+            }
+            CHECK_EQ(title(pdf), string{"Check"});
+        }
+        // A form with a filled-in field, a note, tagged structure, page labels and bookmarks:
+        // AES-256 (revision 6, a user password with characters a shell or HTML would mind),
+        // AES-256 (revision 5, Acrobat 9's) and RC4 128 bits, by user and owner password.
+        const auto check_form = [&](const fs::path &file) {
+            const reader pdf{file};
+            CHECK(!pdf.encrypted());
+            CHECK_EQ(pdf.page_count(), std::size_t{2});
+            CHECK(page_text(pdf, 0).find("(Example form page) Tj") != string::npos);
+            CHECK(page_text(pdf, 1).find("(Second page of the form) Tj") != string::npos);
+            CHECK_EQ(title(pdf), string{"Form check"});
+            const auto catalog = pdf.catalog();
+            for (const auto *key: {"AcroForm", "StructTreeRoot", "MarkInfo", "Lang", "PageLabels", "Outlines"})
+                CHECK_MSG(catalog.contains(key), string{key} + " in " + file.filename().string());
+            const object form = pdf.resolve(catalog.at("AcroForm"));
+            const object fields = pdf.resolve(form.as<dictionary>().at("Fields"));
+            CHECK_EQ(fields.as<array>().size(), std::size_t{1});
+            const object field = pdf.resolve(fields.as<array>()[0]);
+            CHECK_EQ(text_entry(field.as<dictionary>(), "V"), string{"Jane Example"});
+            // The widget is the same object as the page's annotation, and names the page.
+            const auto page = pdf.page(0);
+            const object annots = pdf.resolve(page.at("Annots"));
+            CHECK_EQ(annots.as<array>().size(), std::size_t{2});
+            CHECK_EQ(annots.as<array>()[1].as<reference>().id, fields.as<array>()[0].as<reference>().id);
+            CHECK_EQ(field.as<dictionary>().at("P").as<reference>().id, pdf.pages()[0]);
+            const object note = pdf.resolve(annots.as<array>()[0]);
+            CHECK_EQ(text_entry(note.as<dictionary>(), "Contents"), string{"A note on page one"});
+            CHECK(page.contains("StructParents"));
+            // The structure element names the page.
+            const object tree = pdf.resolve(catalog.at("StructTreeRoot"));
+            const object kids = pdf.resolve(tree.as<dictionary>().at("K"));
+            const object element = pdf.resolve(kids.as<array>()[0]);
+            CHECK_EQ(element.as<dictionary>().at("Pg").as<reference>().id, pdf.pages()[0]);
+        };
+        check_form(fixtures / "form.pdf");
+        for (const auto &[file, password]: std::vector<std::pair<string, string>>{
+                 {"form-aes-256.pdf", "a&b\"c"}, {"form-aes-256.pdf", "xyz"}, {"form-aes-256-r5.pdf", "user"},
+                 {"form-aes-256-r5.pdf", "owner"}, {"form-rc4-128.pdf", "user"}, {"form-rc4-128.pdf", "owner"}}) {
+            CHECK_EQ(reader(fixtures / file, password).page_count(), std::size_t{2});
+            const auto decrypted = out / ("reader-decrypted-" + std::to_string(++n) + ".pdf");
+            decrypt(fixtures / file, decrypted, password);
+            check_form(decrypted);
+        }
+        // A wrong password, or none: the message pageCount() gives, and no output.
+        for (const auto &password: {string{"wrong"}, string{}}) {
+            try {
+                decrypt(fixtures / "form-aes-256.pdf", out / "reader-never-decrypted.pdf", password);
+                CHECK(false);
+            } catch (const std::runtime_error &error) {
+                CHECK(string{error.what()}.find("the password doesn't open this file") != string::npos);
+            }
+        }
+        CHECK(!fs::exists(out / "reader-never-decrypted.pdf"));
+        // In place.
+        const auto in_place = out / "reader-decrypted-in-place.pdf";
+        fs::copy_file(fixtures / "form-aes-256-r5.pdf", in_place, fs::copy_options::overwrite_existing);
+        decrypt(in_place, in_place, "user");
+        check_form(in_place);
+        CHECK(!fs::exists(fs::path{in_place}.concat(".part")));
+        // Not encrypted: copied as it is, byte for byte; in place it's left alone.
+        const auto copied = out / "reader-decrypted-copy.pdf";
+        decrypt(fixtures / "form.pdf", copied);
+        CHECK(read(copied) == read(fixtures / "form.pdf"));
+        decrypt(copied, copied);
+        CHECK(read(copied) == read(fixtures / "form.pdf"));
+        // protect() keeps the whole document too, and decrypt() takes it off again.
+        const auto locked = out / "reader-form-protected.pdf";
+        protect(fixtures / "form-rc4-128.pdf", locked, protection{"open", "admin"}, "owner");
+        note_password(locked, "open");
+        const auto unlocked = out / "reader-form-unlocked.pdf";
+        decrypt(locked, unlocked, "open");
+        check_form(unlocked);
+        // Not a PDF.
+        const auto text = out / "reader-decrypt-not-a-pdf.txt";
+        std::ofstream{text} << "just text";
+        CHECK_THROWS_AS(decrypt(text, out / "reader-never-decrypted.pdf"), std::runtime_error);
+        fs::remove(text);
+    }
+
     SECTION("An incremental update: the newest object and trailer win");
     {
         const auto original = read(own(out / "reader-update-base.pdf", "Gamma"));

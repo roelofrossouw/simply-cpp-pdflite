@@ -13,3 +13,9 @@ tested on files it didn't write itself. Each is read, merged and protected by `t
 | `aes-256-objstm.pdf` | `qpdf --encrypt user owner 256 -- --object-streams=generate` | AES-256 (revision 6) with object streams |
 | `quartz.pdf` | `cupsfilter -m application/pdf` on a text file | macOS's Quartz PDFContext, one page |
 | `mutool.pdf` | `mutool create` | MuPDF's writer, a built-in font, one page |
+| `form.pdf` | written by hand, tidied by `qpdf` | a filled-in text field (AcroForm), a note, tagged structure, page labels, bookmarks; 2 pages |
+| `form-aes-256.pdf` | `qpdf --encrypt --user-password='a&b"c' --owner-password=xyz --bits=256` | AES-256 (revision 6), a user password with `&` and `"` |
+| `form-aes-256-r5.pdf` | `qpdf --encrypt --user-password=user --owner-password=owner --bits=256 --force-R5` | AES-256 revision 5 (Acrobat 9's) |
+| `form-rc4-128.pdf` | `qpdf --allow-weak-crypto --encrypt --user-password=user --owner-password=owner --bits=128 --use-aes=n` | RC4 128 bits on the form |
+
+The `form*.pdf` files were added 2026-11-16 for `decrypt()` (made-up content).

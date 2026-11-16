@@ -30,7 +30,9 @@ namespace sc::pdflite {
         // references between them renumbered.
         class copier {
         public:
-            copier(const reader &in, file &out) : in_(in), out_(out) {
+            // whole: the whole document is copied (its catalog too), so a page keeps what ties it
+            // to the tagged structure and article beads.
+            copier(const reader &in, file &out, const bool whole = false) : in_(in), out_(out), whole_(whole) {
                 // The input's own /Encrypt dictionary has no place in the new file.
                 if (const auto *encrypt = in.trailer().find("Encrypt"); encrypt && encrypt->is<reference>()) dropped_.insert(encrypt->as<reference>().id);
             }
@@ -58,7 +60,7 @@ namespace sc::pdflite {
                     const auto &k = key.text();
                     // Its old parent, and what ties it to structures that aren't copied (article
                     // beads, the tagged structure tree).
-                    if (k == "Type" || k == "Parent" || k == "B" || k == "StructParents") continue;
+                    if (k == "Type" || k == "Parent" || (!whole_ && (k == "B" || k == "StructParents"))) continue;
                     if (object copied = copy(value); !copied.is<std::nullptr_t>()) page.add(k, std::move(copied));
                 }
                 if (adjust) adjust(page, theirs);
@@ -123,6 +125,7 @@ namespace sc::pdflite {
 
             const reader &in_;
             file &out_;
+            bool whole_ = false;
             std::unordered_map<std::uint32_t, std::uint32_t> pages_;
             std::unordered_map<std::uint32_t, std::uint32_t> copied_;
             std::set<std::uint32_t> dropped_;
@@ -172,9 +175,8 @@ namespace sc::pdflite {
 
         // An input's document information, bookmarks and named destinations, copied into the new
         // catalog and information.
-        void copy_document(copier &copy, file &out, dictionary &catalog, std::uint32_t &info) {
-            const reader &in = copy.in();
-            if (const auto *found = in.trailer().find("Info")) {
+        void copy_information(copier &copy, file &out, std::uint32_t &info) {
+            if (const auto *found = copy.in().trailer().find("Info")) {
                 if (const object copied = copy.copy(*found); copied.is<reference>()) {
                     info = copied.as<reference>().id;
                 } else if (copied.is<dictionary>()) {
@@ -182,6 +184,11 @@ namespace sc::pdflite {
                     out.write(info, copied);
                 }
             }
+        }
+
+        void copy_document(copier &copy, file &out, dictionary &catalog, std::uint32_t &info) {
+            const reader &in = copy.in();
+            copy_information(copy, out, info);
             const dictionary theirs = in.catalog();
             if (const auto *outlines = theirs.find("Outlines")) {
                 if (object copied = copy.copy(*outlines); !copied.is<std::nullptr_t>()) {
@@ -513,6 +520,27 @@ namespace sc::pdflite {
         };
     }
 
+    namespace {
+        // in's whole document written again: its pages and every entry of its catalog (forms, the
+        // tagged structure, bookmarks, names, page labels, metadata ...) and its information.
+        void copy_whole(const reader &in, const std::filesystem::path &output, const std::optional<protection> &protect) {
+            write_file(output, protect, [&](file &out, const std::uint32_t tree, array &kids, dictionary &catalog, std::uint32_t &info) {
+                copier copy{in, out, true};
+                const auto numbers = copy.number_pages();
+                for (std::size_t i = 0; i < numbers.size(); ++i) {
+                    copy.write_page(i, numbers[i], tree);
+                    kids.push_back(reference{numbers[i]});
+                }
+                copy_information(copy, out, info);
+                for (const auto &[key, value]: in.catalog()) {
+                    if (key.text() == "Type" || key.text() == "Pages") continue; // the new file's own
+                    if (object copied = copy.copy(value); !copied.is<std::nullptr_t>()) catalog.add(key.text(), std::move(copied));
+                }
+                copy.flush();
+            });
+        }
+    }
+
     void merge(const std::vector<std::reference_wrapper<const reader>> &inputs, const std::filesystem::path &output,
                const std::optional<protection> &protect) {
         write_file(output, protect, [&](file &out, const std::uint32_t tree, array &kids, dictionary &catalog, std::uint32_t &info) {
@@ -571,7 +599,28 @@ namespace sc::pdflite {
 
     void protect(const std::filesystem::path &input, const std::filesystem::path &output, const protection &settings, const std::string_view password) {
         const reader in{input, password};
-        merge({std::cref(in)}, output, settings);
+        copy_whole(in, output, settings);
+    }
+
+    void decrypt(const reader &input, const std::filesystem::path &output) { copy_whole(input, output, std::nullopt); }
+
+    void decrypt(const std::filesystem::path &input, const std::filesystem::path &output, const std::string_view password) {
+        const reader in{input, password};
+        if (in.encrypted()) {
+            decrypt(in, output);
+            return;
+        }
+        // Not encrypted: the file as it is (a signature on it stays valid).
+        std::error_code error;
+        if (std::filesystem::equivalent(input, output, error)) return;
+        std::filesystem::path part = output;
+        part += ".part";
+        std::filesystem::copy_file(input, part, std::filesystem::copy_options::overwrite_existing, error);
+        if (!error) std::filesystem::rename(part, output, error);
+        if (error) {
+            std::filesystem::remove(part, error);
+            throw std::runtime_error("sc::pdflite: can't write " + output.string());
+        }
     }
 
     void decorate(const reader &input, const reader &decoration, const std::filesystem::path &output, const layer where,

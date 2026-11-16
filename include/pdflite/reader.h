@@ -16,7 +16,7 @@
 // out of it (pdflite/merge.h). It reads well-formed files: cross-reference tables and streams,
 // object streams, incremental updates (the newest object wins), FlateDecode (with its
 // predictors), and files encrypted by the standard security handler (RC4 and AES-128, revisions 2
-// to 4; AES-256, revision 6). A damaged file is repaired as it's read, as qpdf and MuPDF repair
+// to 4; AES-256, revisions 5 and 6). A damaged file is repaired as it's read, as qpdf and MuPDF repair
 // one: when its cross-reference doesn't lead to its objects, it's rebuilt by scanning the file
 // for them (repaired() says so), and when its page tree can't be read, its pages are taken in the
 // order they're in the file.

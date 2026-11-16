@@ -1037,7 +1037,7 @@ namespace sc::pdflite {
             const int version = integer_in(encrypt, "V", 0);
             s.revision = integer_in(encrypt, "R", 0);
             if (const auto *metadata = encrypt.find("EncryptMetadata"); metadata && metadata->is<bool>()) s.metadata = metadata->as<bool>();
-            if (s.revision == 6) {
+            if (s.revision == 5 || s.revision == 6) {
                 auto key = encryption::key_for(encrypt, password);
                 if (!key && !password.empty()) key = encryption::key_for(encrypt, "");
                 if (!key) damaged("the password doesn't open this file");

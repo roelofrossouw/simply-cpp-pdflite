@@ -38,9 +38,22 @@ namespace sc::pdflite {
                const std::optional<protection> &protect = std::nullopt);
 
     // input written again at output (which may be input) with passwords (AES-256); password opens
-    // input when it's encrypted already.
+    // input when it's encrypted already. The whole document comes as it was: its pages and every
+    // entry of its catalog (forms, the tagged structure, bookmarks, names, page labels, metadata).
     void protect(const std::filesystem::path &input, const std::filesystem::path &output, const protection &settings,
                  std::string_view password = {});
+
+    // input written again at output (which may be input) without encryption: the whole document as
+    // protect() copies it, every string and stream decrypted, no /Encrypt. A digital signature on
+    // it no longer matches (the file's bytes change). Throws std::runtime_error when the file can't
+    // be written (output is then left as it was).
+    void decrypt(const reader &input, const std::filesystem::path &output);
+
+    // The same for a file, opened with password (the user's or the owner's; empty for a file with
+    // an owner password only). One that isn't encrypted is copied as it is (output may be input:
+    // then nothing changes). Throws std::runtime_error when the password doesn't open it ("the
+    // password doesn't open this file") or it isn't a PDF.
+    void decrypt(const std::filesystem::path &input, const std::filesystem::path &output, std::string_view password = {});
 
     // Where decorate() draws: behind the page's content (a letterhead, a background) or over it (a
     // stamp, a watermark over text).
