@@ -24,6 +24,10 @@ namespace sc::pdflite {
     namespace {
         [[noreturn]] void damaged(const std::string &what) { throw std::runtime_error("sc::pdflite: " + what); }
 
+        // A file encrypted in a way this reader doesn't know (another security handler, an unknown
+        // revision or crypt filter): told apart from a wrong password, so callers don't ask for one.
+        [[noreturn]] void unreadable(const std::string &what) { throw std::runtime_error("sc::pdflite: an encryption sc::pdflite can't read: " + what); }
+
         // ---- Lexing (7.2) ----
 
         bool is_white(const char c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == '\f' || c == '\0'; }
@@ -506,7 +510,7 @@ namespace sc::pdflite {
             if (kind == "AESV2") return method::aes128;
             if (kind == "AESV3") return method::aes256;
             if (kind == "None") return method::none;
-            damaged("crypt filter method " + kind + " isn't supported");
+            unreadable("crypt filter method " + kind);
         }
     }
 
@@ -1032,14 +1036,20 @@ namespace sc::pdflite {
             if (!encrypt_value.is<dictionary>()) damaged("the trailer's /Encrypt isn't a dictionary");
             const auto &encrypt = encrypt_value.as<dictionary>();
             const auto *filter = encrypt.find("Filter");
-            if (!filter || !filter->is<name>() || filter->as<name>().text() != "Standard")
-                damaged("encrypted by a security handler other than the standard one");
+            if (!filter || !filter->is<name>())
+                damaged("the encryption dictionary names no security handler");
+            if (filter->as<name>().text() != "Standard") unreadable("the security handler " + filter->as<name>().text());
             const int version = integer_in(encrypt, "V", 0);
             s.revision = integer_in(encrypt, "R", 0);
             if (const auto *metadata = encrypt.find("EncryptMetadata"); metadata && metadata->is<bool>()) s.metadata = metadata->as<bool>();
             if (s.revision == 5 || s.revision == 6) {
-                auto key = encryption::key_for(encrypt, password);
-                if (!key && !password.empty()) key = encryption::key_for(encrypt, "");
+                std::optional<std::string> key;
+                try {
+                    key = encryption::key_for(encrypt, password);
+                    if (!key && !password.empty()) key = encryption::key_for(encrypt, "");
+                } catch (const std::invalid_argument &error) {
+                    damaged(std::string{error.what()}.substr(std::string_view{"sc::pdflite: "}.size()));
+                }
                 if (!key) damaged("the password doesn't open this file");
                 s.key = std::move(*key);
                 s.strings = crypt_method(encrypt, "StrF", version);
@@ -1071,7 +1081,7 @@ namespace sc::pdflite {
                 s.strings = crypt_method(encrypt, "StrF", version);
                 s.streams = crypt_method(encrypt, "StmF", version);
             } else {
-                damaged("encryption revision " + std::to_string(s.revision) + " isn't supported");
+                unreadable("revision " + std::to_string(s.revision));
             }
             security = std::move(s);
             objects.clear(); // read before the key was known

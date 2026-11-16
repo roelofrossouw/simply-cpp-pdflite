@@ -149,6 +149,53 @@ int main() {
         CHECK_THROWS_AS(reader(out / "reader-locked.pdf"), std::runtime_error);
     }
 
+    SECTION("Revisions 2 to 6 without a user password, by the owner's, EncryptMetadata false; three kinds of failure told apart");
+    {
+        const string plain = page_text(reader{fixtures / "objstm.pdf"}, 0);
+        const auto message = [](const std::function<void()> &open) {
+            try {
+                open();
+            } catch (const std::runtime_error &error) {
+                return string{error.what()};
+            }
+            return string{"(opened)"};
+        };
+        // No user password (printing and changes refused): opens with none, any, or the owner's
+        for (const auto &file: {"rc4-40.pdf", "rc4-40-plain.pdf", "rc4-128-empty.pdf", "aes-128-owner.pdf", "aes-256-r5-empty.pdf"}) {
+            for (const auto &password: {"", "anything", "owner"}) {
+                const reader pdf{fixtures / file, password};
+                CHECK(pdf.encrypted());
+                CHECK_EQ(pdf.page_count(), std::size_t{7});
+                const string first = page_text(pdf, 0);
+                CHECK_EQ(first, plain);
+            }
+        }
+        // A user password: the user's or the owner's opens, none or a wrong one doesn't
+        for (const auto &file: {"rc4-128.pdf", "aes-128-cleartext-metadata.pdf", "form-aes-256-r5.pdf", "aes-256-objstm.pdf"}) {
+            CHECK_EQ(reader(fixtures / file, "user").page_count(), reader(fixtures / file, "owner").page_count());
+            CHECK_EQ(message([&] { (void) reader(fixtures / file); }), string{"sc::pdflite: the password doesn't open this file"});
+            CHECK_EQ(message([&] { (void) reader(fixtures / file, "wrong"); }), string{"sc::pdflite: the password doesn't open this file"});
+        }
+        const string metadata_text = page_text(reader{fixtures / "aes-128-cleartext-metadata.pdf", "user"}, 0);
+        CHECK_EQ(metadata_text, plain);
+        CHECK_EQ(title(reader{fixtures / "aes-128-cleartext-metadata.pdf", "user"}), string{"Check"});
+        // Encryption it can't read: no password would help (same lengths, so the offsets hold)
+        const string bytes = read(fixtures / "rc4-40-plain.pdf");
+        const auto patched = [&](const string &from, const string &to) {
+            string out = bytes;
+            const auto at = out.find(from);
+            CHECK(at != string::npos);
+            if (at != string::npos) out.replace(at, from.size(), to);
+            return out;
+        };
+        CHECK_EQ(message([&] { (void) reader::from_memory(patched("/Filter /Standard", "/Filter /PubSec01")); }),
+                 string{"sc::pdflite: an encryption sc::pdflite can't read: the security handler PubSec01"});
+        CHECK_EQ(message([&] { (void) reader::from_memory(patched("/R 2", "/R 9"), "owner"); }),
+                 string{"sc::pdflite: an encryption sc::pdflite can't read: revision 9"});
+        CHECK(message([&] { (void) reader::from_memory("%PDF-1.7\nnot a pdf at all"); }).starts_with("sc::pdflite: "));
+        CHECK(message([&] { (void) reader::from_memory("%PDF-1.7\nnot a pdf at all"); }).find("password") == string::npos);
+    }
+
     SECTION("decrypt(): every encryption, by user or owner password; forms, annotations, structure kept; in place");
     {
         // The 7-page reports: each page's content as the unencrypted file has it.

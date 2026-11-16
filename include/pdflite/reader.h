@@ -32,11 +32,16 @@ namespace sc::pdflite {
 
     class reader {
     public:
-        // Reads a file, and opens it with password (the user's or the owner's) when it's encrypted;
-        // an empty password opens a file that needs none to be read (an owner password only).
-        // Throws std::runtime_error when it can't be read, isn't a PDF, is damaged beyond repair (no
-        // catalog or pages can be found), uses a security handler other than the standard one, or
-        // the password doesn't open it.
+        // Reads a file, and opens it with password (the user's or the owner's) when it's encrypted:
+        // the standard security handler, revisions 2 to 6 (RC4 40 to 128 bits, AES-128, AES-256).
+        // A file with an empty user password (an owner password only, restricting printing or
+        // copying) opens with any password or none.
+        // Throws std::runtime_error, its message telling three cases apart:
+        //   "sc::pdflite: the password doesn't open this file": a password is needed, or this one is wrong;
+        //   "sc::pdflite: an encryption sc::pdflite can't read: ...": another security handler (e.g.
+        //     certificates, /Adobe.PubSec), an unknown revision or crypt filter; no password helps;
+        //   any other "sc::pdflite: ..." message: it can't be read, isn't a PDF or is damaged beyond
+        //     repair (no catalog or pages can be found).
         explicit reader(const std::filesystem::path &file, std::string_view password = {});
 
         // The same, from a PDF in memory.
