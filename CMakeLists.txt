@@ -32,8 +32,7 @@ target_compile_definitions(sc-obj-pdflite PRIVATE SC_PDFLITE_VERSION="${SC_VERSI
 
 add_sc_libraries(DESCRIPTION "simply-cpp-pdflite")
 
-# Old paths <pdflite.h> and <pdflite/x.h> forward to <sc/pdflite/...> for one release cycle.
-install_sc_module(PATH_VARS CMAKE_INSTALL_INCLUDEDIR COMPAT_SUBDIR pdflite COMPAT_FLAT pdflite.h)
+install_sc_module(PATH_VARS CMAKE_INSTALL_INCLUDEDIR)
 install(FILES cmake/SimplyCppFunctions.cmake cmake/sc_bootstrap.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sc-pdflite
         COMPONENT development)
