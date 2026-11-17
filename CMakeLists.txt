@@ -56,7 +56,7 @@ add_sc_example(sc-pdflite-writer)
 # from a build.
 install(FILES examples/resource/badge.png examples/resource/badge-interlaced.png examples/resource/stamp.png
         examples/resource/gradient.png examples/resource/drawing.svg
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/simply-cpp-pdflite COMPONENT runtime)
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/simply-cpp-pdflite COMPONENT tools)
 foreach (demo IN ITEMS sc-pdflite-png sc-pdflite-svg)
     if (TARGET ${demo})
         target_compile_definitions(${demo} PRIVATE
