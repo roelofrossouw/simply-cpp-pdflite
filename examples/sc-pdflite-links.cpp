@@ -7,11 +7,11 @@
 #include <string>
 #include <vector>
 
-#include <params.h>
-#include <sc.h>
+#include <sc/core/params.h>
+#include <sc/core/sc.h>
 
-#include <pdflite.h>
-#include <standard_font.h>
+#include <sc/pdflite/pdflite.h>
+#include <sc/graphics/standard_font.h>
 
 namespace {
     // A line of text in a built-in font, its baseline starting at (x, y), and the area it covers,

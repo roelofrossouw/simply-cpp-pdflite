@@ -3,7 +3,7 @@
 // streams, linearized files, incremental updates, and every encryption the standard security
 // handler has (RC4 40 and 128 bits, AES-128 and AES-256); merges and protected files are read back
 // page by page. The files written go to SC_PDFLITE_OUTPUT too, for ctest's check-* tests.
-#include "pdflite.h"
+#include <sc/pdflite/pdflite.h>
 
 #include "sc_test.h"
 

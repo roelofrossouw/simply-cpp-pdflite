@@ -1,8 +1,8 @@
-#include "pdflite/document.h"
+#include <sc/pdflite/document.h>
 
-#include "pdflite/object.h"
+#include <sc/pdflite/object.h>
 
-#include <standard_font.h>
+#include <sc/graphics/standard_font.h>
 
 #include <algorithm>
 #include <array>

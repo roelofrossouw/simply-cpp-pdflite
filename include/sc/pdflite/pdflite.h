@@ -20,18 +20,18 @@
 //                       (protect), another file's pages behind or over its pages (decorate)
 // Positions are sc-graphics' canvas's: points from the page's top-left corner, y down (PDF's
 // own, y up from the bottom, are what gets written).
-#include "pdflite/object.h"
-#include "pdflite/file.h"
-#include "pdflite/content.h"
-#include "pdflite/resource.h"
-#include "pdflite/image.h"
-#include "pdflite/jpeg.h"
-#include "pdflite/png.h"
-#include "pdflite/svg.h"
-#include "pdflite/font.h"
-#include "pdflite/encryption.h"
-#include "pdflite/document.h"
-#include "pdflite/reader.h"
-#include "pdflite/merge.h"
+#include <sc/pdflite/object.h>
+#include <sc/pdflite/file.h>
+#include <sc/pdflite/content.h>
+#include <sc/pdflite/resource.h>
+#include <sc/pdflite/image.h>
+#include <sc/pdflite/jpeg.h>
+#include <sc/pdflite/png.h>
+#include <sc/pdflite/svg.h>
+#include <sc/pdflite/font.h>
+#include <sc/pdflite/encryption.h>
+#include <sc/pdflite/document.h>
+#include <sc/pdflite/reader.h>
+#include <sc/pdflite/merge.h>
 
 #endif //SC_PDFLITE_H

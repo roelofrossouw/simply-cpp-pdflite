@@ -9,9 +9,9 @@ get_sc_version()
 message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
 # sc::distance (distance.h), and points and sizes of distances with in<Unit>() since 1.17.0.
-find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.20.0)
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 2.2.0)
 # sc::standard_font (the built-in fonts by face since 6.2.0) and paper sizes in millimetres.
-find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 6.3.0)
+find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 6.4.0)
 # Streams are compressed with zlib; embedded fonts are read by FreeType (as sc-graphics reads them).
 find_package(ZLIB REQUIRED)
 config_or_install_package(freetype2 libfreetype-dev freetype)
@@ -32,7 +32,8 @@ target_compile_definitions(sc-obj-pdflite PRIVATE SC_PDFLITE_VERSION="${SC_VERSI
 
 add_sc_libraries(DESCRIPTION "simply-cpp-pdflite")
 
-install_sc_module(PATH_VARS CMAKE_INSTALL_INCLUDEDIR)
+# Old paths <pdflite.h> and <pdflite/x.h> forward to <sc/pdflite/...> for one release cycle.
+install_sc_module(PATH_VARS CMAKE_INSTALL_INCLUDEDIR COMPAT_SUBDIR pdflite COMPAT_FLAT pdflite.h)
 install(FILES cmake/SimplyCppFunctions.cmake cmake/sc_bootstrap.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sc-pdflite
         COMPONENT development)
@@ -74,4 +75,4 @@ if (sc-image_FOUND AND SC_BUILD_EXAMPLES)
 endif ()
 
 package_sc_module(
-        DEV_DEPENDS "simply-cpp-dev (>= 1.20.0~)" "simply-cpp-graphics-dev (>= 6.3.0~)" zlib1g-dev libfreetype-dev libssl-dev)
+        DEV_DEPENDS "simply-cpp-dev (>= 1.20.0~)" "simply-cpp-graphics-dev (>= 6.4.0~)" zlib1g-dev libfreetype-dev libssl-dev)

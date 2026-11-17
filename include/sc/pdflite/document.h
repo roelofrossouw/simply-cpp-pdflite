@@ -1,20 +1,20 @@
 #ifndef SC_PDFLITE_DOCUMENT_H
 #define SC_PDFLITE_DOCUMENT_H
 
-#include "content.h"
-#include "encryption.h"
-#include "file.h"
-#include "font.h"
-#include "image.h"
+#include <sc/pdflite/content.h>
+#include <sc/pdflite/encryption.h>
+#include <sc/pdflite/file.h>
+#include <sc/pdflite/font.h>
+#include <sc/pdflite/image.h>
 
 #include <memory>
-#include "object.h"
+#include <sc/pdflite/object.h>
 
-#include <distance.h>
-#include <page.h>
-#include <rect.h>
-#include <size.h>
-#include <standard_font.h>
+#include <sc/core/distance.h>
+#include <sc/graphics/page.h>
+#include <sc/core/rect.h>
+#include <sc/core/size.h>
+#include <sc/graphics/standard_font.h>
 
 #include <cstdint>
 #include <filesystem>

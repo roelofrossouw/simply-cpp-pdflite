@@ -1,6 +1,6 @@
-#include "pdflite/jpeg.h"
+#include <sc/pdflite/jpeg.h>
 
-#include "pdflite/object.h"
+#include <sc/pdflite/object.h>
 
 #include <fstream>
 #include <iterator>

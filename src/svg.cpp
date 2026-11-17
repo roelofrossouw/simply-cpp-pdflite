@@ -1,11 +1,11 @@
-#include "pdflite/svg.h"
+#include <sc/pdflite/svg.h>
 
-#include "pdflite/content.h"
-#include "pdflite/jpeg.h"
-#include "pdflite/object.h"
-#include "pdflite/png.h"
+#include <sc/pdflite/content.h>
+#include <sc/pdflite/jpeg.h>
+#include <sc/pdflite/object.h>
+#include <sc/pdflite/png.h>
 
-#include <standard_font.h>
+#include <sc/graphics/standard_font.h>
 
 #include <map>
 #include <stdexcept>

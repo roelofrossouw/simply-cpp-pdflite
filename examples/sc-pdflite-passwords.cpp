@@ -6,11 +6,11 @@
 #include <iostream>
 #include <string>
 
-#include <params.h>
-#include <sc.h>
+#include <sc/core/params.h>
+#include <sc/core/sc.h>
 
-#include <distance.h>
-#include <pdflite.h>
+#include <sc/core/distance.h>
+#include <sc/pdflite/pdflite.h>
 
 // The units by their plain names: mm(10), inch(1), pdf.size().in<mm>().
 using namespace sc::dist;

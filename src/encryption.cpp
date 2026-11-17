@@ -1,4 +1,4 @@
-#include "pdflite/encryption.h"
+#include <sc/pdflite/encryption.h>
 
 #include <openssl/evp.h>
 #include <openssl/rand.h>

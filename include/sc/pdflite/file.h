@@ -1,8 +1,8 @@
 #ifndef SC_PDFLITE_FILE_H
 #define SC_PDFLITE_FILE_H
 
-#include "encryption.h"
-#include "object.h"
+#include <sc/pdflite/encryption.h>
+#include <sc/pdflite/object.h>
 
 #include <cstdint>
 #include <filesystem>

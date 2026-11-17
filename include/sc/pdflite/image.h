@@ -1,9 +1,9 @@
 #ifndef SC_PDFLITE_IMAGE_H
 #define SC_PDFLITE_IMAGE_H
 
-#include "resource.h"
+#include <sc/pdflite/resource.h>
 
-#include <size.h>
+#include <sc/core/size.h>
 
 #include <memory>
 #include <string_view>

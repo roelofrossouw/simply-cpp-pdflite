@@ -1,6 +1,6 @@
-#include "pdflite/png.h"
+#include <sc/pdflite/png.h>
 
-#include "pdflite/object.h"
+#include <sc/pdflite/object.h>
 
 #include <zlib.h>
 

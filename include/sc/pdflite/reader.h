@@ -1,7 +1,7 @@
 #ifndef SC_PDFLITE_READER_H
 #define SC_PDFLITE_READER_H
 
-#include "object.h"
+#include <sc/pdflite/object.h>
 
 #include <cstddef>
 #include <cstdint>

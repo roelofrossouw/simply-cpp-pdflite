@@ -1,7 +1,7 @@
 #ifndef SC_PDFLITE_RESOURCE_H
 #define SC_PDFLITE_RESOURCE_H
 
-#include "file.h"
+#include <sc/pdflite/file.h>
 
 #include <cstdint>
 #include <string_view>

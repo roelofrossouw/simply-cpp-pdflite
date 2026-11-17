@@ -1,7 +1,7 @@
 #ifndef SC_PDFLITE_JPEG_H
 #define SC_PDFLITE_JPEG_H
 
-#include "image.h"
+#include <sc/pdflite/image.h>
 
 #include <filesystem>
 #include <memory>

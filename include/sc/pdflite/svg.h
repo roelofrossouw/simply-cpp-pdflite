@@ -1,9 +1,9 @@
 #ifndef SC_PDFLITE_SVG_H
 #define SC_PDFLITE_SVG_H
 
-#include "image.h"
+#include <sc/pdflite/image.h>
 
-#include <drawing.h>
+#include <sc/graphics/drawing.h>
 
 #include <filesystem>
 #include <memory>

@@ -1,6 +1,6 @@
-#include "pdflite/reader.h"
+#include <sc/pdflite/reader.h>
 
-#include "pdflite/encryption.h"
+#include <sc/pdflite/encryption.h>
 
 #include <openssl/evp.h>
 #include <zlib.h>

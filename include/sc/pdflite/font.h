@@ -1,10 +1,10 @@
 #ifndef SC_PDFLITE_FONT_H
 #define SC_PDFLITE_FONT_H
 
-#include "resource.h"
+#include <sc/pdflite/resource.h>
 
-#include <distance.h>
-#include <font.h>
+#include <sc/core/distance.h>
+#include <sc/graphics/font.h>
 
 #include <filesystem>
 #include <memory>

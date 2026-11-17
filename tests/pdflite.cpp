@@ -1,17 +1,17 @@
 // sc-pdflite: how values are spelt, the content stream's rules, and files
 // whose structure is checked byte by byte here; ctest's check-* tests then run qpdf, pdfcpu and
 // mutool over every file written to SC_PDFLITE_OUTPUT.
-#include "pdflite.h"
+#include <sc/pdflite/pdflite.h>
 
 #include "sc_test.h"
 
-#include <base64.h>
-#include <console.h>
+#include <sc/core/base64.h>
+#include <sc/core/console.h>
 
 #include <zlib.h>
 
-#include <font.h>
-#include <font_face.h>
+#include <sc/graphics/font.h>
+#include <sc/graphics/font_face.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_OUTLINE_H

@@ -14,9 +14,9 @@
 #include <string>
 #include <vector>
 
-#include <params.h>
+#include <sc/core/params.h>
 
-#include <pdflite.h>
+#include <sc/pdflite/pdflite.h>
 
 int main(int argc, char **argv) {
     const sc::params args{argc, argv, {

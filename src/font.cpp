@@ -1,8 +1,8 @@
-#include "pdflite/font.h"
+#include <sc/pdflite/font.h>
 
-#include "pdflite/object.h"
+#include <sc/pdflite/object.h>
 
-#include <font_face.h>
+#include <sc/graphics/font_face.h>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H

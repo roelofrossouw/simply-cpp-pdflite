@@ -1,8 +1,8 @@
 #ifndef SC_PDFLITE_MERGE_H
 #define SC_PDFLITE_MERGE_H
 
-#include "encryption.h"
-#include "reader.h"
+#include <sc/pdflite/encryption.h>
+#include <sc/pdflite/reader.h>
 
 #include <filesystem>
 #include <functional>

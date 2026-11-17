@@ -1,6 +1,6 @@
-#include "pdflite/content.h"
+#include <sc/pdflite/content.h>
 
-#include "pdflite/object.h"
+#include <sc/pdflite/object.h>
 
 #include <algorithm>
 #include <cmath>

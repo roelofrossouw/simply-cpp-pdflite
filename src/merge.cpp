@@ -1,9 +1,9 @@
-#include "pdflite/merge.h"
+#include <sc/pdflite/merge.h>
 
-#include "pdflite/document.h"
-#include "pdflite/file.h"
-#include "pdflite/jpeg.h"
-#include "pdflite/png.h"
+#include <sc/pdflite/document.h>
+#include <sc/pdflite/file.h>
+#include <sc/pdflite/jpeg.h>
+#include <sc/pdflite/png.h>
 
 #include <algorithm>
 #include <array>
