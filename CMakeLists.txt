@@ -10,7 +10,7 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
 # sc::distance (distance.h), and points and sizes of distances with in<Unit>() since 1.17.0.
 find_or_install_package(sc-core simply-cpp-dev simply-cpp 2.2.0)
-# sc::standard_font (the built-in fonts by face since 6.2.0) and paper sizes in millimetres.
+# sc::canvas (writer), sc::standard_font (the built-in fonts by face since 6.2.0) and paper sizes in millimetres.
 find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 6.4.0)
 # Streams are compressed with zlib; embedded fonts are read by FreeType (as sc-graphics reads them).
 find_package(ZLIB REQUIRED)
@@ -23,7 +23,7 @@ set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
 add_sc_object(pdflite
-        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/jpeg.cpp src/png.cpp src/svg.cpp src/font.cpp src/encryption.cpp src/reader.cpp src/merge.cpp
+        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/jpeg.cpp src/png.cpp src/svg.cpp src/font.cpp src/encryption.cpp src/reader.cpp src/merge.cpp src/writer.cpp
         LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB PkgConfig::freetype2 OpenSSL::Crypto
         PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB OpenSSL::Crypto)
 
@@ -51,6 +51,8 @@ add_sc_example(sc-pdflite-svg)
 add_sc_example(sc-pdflite-fonts)
 add_sc_example(sc-pdflite-passwords)
 add_sc_example(sc-pdflite-merge)
+# sc::pdflite::writer, the canvas (sc-pdf's sc::pdf until it moved here)
+add_sc_example(sc-pdflite-writer)
 # The PNG and SVG demos' pictures are installed with them, and found in the source when they run
 # from a build.
 install(FILES examples/resource/badge.png examples/resource/badge-interlaced.png examples/resource/stamp.png

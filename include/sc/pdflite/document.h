@@ -41,7 +41,7 @@ namespace sc::pdflite {
         // file can't be created.
         document(const std::filesystem::path &path, const sc::size_<sc::distance> &size);
 
-        // A standard paper size (sc-graphics' page.h, shared with sc-pdf and sc-mupdf), portrait
+        // A standard paper size (sc-graphics' page.h, shared with the writer and sc-mupdf), portrait
         // or turned to landscape.
         explicit document(const std::filesystem::path &path, sc::page_size paper = sc::page_size::A4,
                           sc::orientation turned = sc::orientation::portrait);

@@ -18,6 +18,7 @@
 //   pdflite/reader.h    an existing PDF's objects and pages
 //   pdflite/merge.h     existing PDFs' pages in a new file (merge), a file given passwords
 //                       (protect), another file's pages behind or over its pages (decorate)
+//   pdflite/writer.h    a whole PDF drawn as an sc::canvas, as an sc::image is drawn
 // Positions are sc-graphics' canvas's: points from the page's top-left corner, y down (PDF's
 // own, y up from the bottom, are what gets written).
 #include <sc/pdflite/object.h>
@@ -33,5 +34,6 @@
 #include <sc/pdflite/document.h>
 #include <sc/pdflite/reader.h>
 #include <sc/pdflite/merge.h>
+#include <sc/pdflite/writer.h>
 
 #endif //SC_PDFLITE_H

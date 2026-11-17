@@ -33,3 +33,6 @@ foreach (checker IN ITEMS qpdf pdfcpu mutool)
         message(STATUS "${checker} not found: the PDFs aren't checked with it")
     endif ()
 endforeach ()
+# sc::pdflite::writer, the canvas (sc-pdf's tests until it moved here).
+add_sc_test(writer LABELS unit)
+target_compile_definitions(test-writer PRIVATE SC_PDFLITE_TEST_WRITER="${CMAKE_CURRENT_SOURCE_DIR}/resource/writer")

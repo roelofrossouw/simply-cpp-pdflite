@@ -1,8 +1,9 @@
 # simply-cpp-pdflite
 
 simply-cpp's own PDF writer, in C++20: strict ISO 32000-1 (PDF 1.7), with no library but zlib.
-It's the engine under [sc-pdf](https://github.com/roelofrossouw/simply-cpp-pdf), whose
-`sc::pdf` canvas draws through it; use sc-pdflite directly for PDFs object by object.
+Draw whole PDFs with `sc::pdflite::writer`, an `sc::canvas` (the same calls as an `sc::image`),
+or build them object by object with `sc::pdflite::document`. (`sc::pdflite::writer` was sc-pdf's
+`sc::pdf` until sc-pdf was merged in here.)
 
 What it writes so far:
 
@@ -11,7 +12,7 @@ What it writes so far:
 - **Pages** of one size, each with a content stream compressed with zlib; an earlier page can be
   drawn on again until the document is closed. Each page has its own size, the document's unless
   `add_page()` gives one: one of sc-graphics' paper sizes
-  (`sc::page_size::A4`, A3, A5, Letter, Legal, and `sc::orientation`, as sc-pdf and sc-mupdf
+  (`sc::page_size::A4`, A3, A5, Letter, Legal, and `sc::orientation`, as the writer and sc-mupdf
   take them) or any width and height in points.
 - **Content:** paths (lines, curves, rectangles), RGB fill and stroke colours, line width,
   transforms, clipping (nonzero and even-odd), graphics states and text, and transparency
@@ -111,6 +112,57 @@ fonts, information), `pdflite/reader.h` (an existing file read) and `pdflite/mer
 `protect()`). `pdflite.h` includes them all.
 
 **Documentation:** the [simply-cpp wiki](https://github.com/roelofrossouw/simply-cpp/wiki) has a [PDF guide](https://github.com/roelofrossouw/simply-cpp/wiki/PDF), plus [getting started](https://github.com/roelofrossouw/simply-cpp/wiki/Getting-Started) for the whole suite.
+
+## Drawing on a canvas: sc::pdflite::writer
+
+`sc::pdflite::writer` is an `sc::canvas` from
+[sc-graphics](https://github.com/roelofrossouw/simply-cpp-graphics): shapes, text, paths and SVG
+are drawn with the same `draw()` calls as on an `sc::image`, each shape with an `sc::appearance`
+(stroke and fill). Positions are in points (1/72 inch) from the page's top-left corner, y down.
+A colour's alpha is honoured for fills, strokes and text. Fonts are found through fontconfig and
+embedded (subset). Curves and SVG stay vector graphics, and SVG clip paths clip.
+[sc-mupdf](https://github.com/roelofrossouw/simply-cpp-mupdf)'s `sc::mupdf::writer` takes the same
+calls on MuPDF (AGPL-3.0), so a program can switch engines by changing one class name.
+
+```cpp
+#include <sc/pdflite/writer.h>
+
+sc::pdflite::writer pdf{"hello.pdf"};                        // A4 portrait
+// sc::pdflite::writer wide{"wide.pdf", sc::page_size::A3, sc::orientation::landscape};
+pdf.draw(sc::text{"Hello", {50, 80}, sc::font::bold("sans-serif", 24)});
+const sc::text body{"Body text", {50, 100}, {"serif", 11}};  // baseline at y = 100
+pdf.draw(body);
+const double width = pdf.text_width(body);                   // in its own font
+pdf.draw(sc::line{{50, 110}, {50 + width, 110}}, sc::stroke{sc::color::Black, 0.5});
+pdf.draw(sc::rounded_rect{sc::rect{300, 130, 200, 80}, 8}, {sc::color::Black, sc::color{0.9, 0.95, 1}});
+pdf.draw(sc::circle{{400, 300}, 30}, sc::appearance::filled(sc::color{0, 0, 0, 0.5})); // half opaque
+pdf.draw_image("logo.png", {300, 130, 200, 80});             // JPEG or PNG, fitted
+pdf.draw(sc::bitmap::load("photo.jpg"), {50, 350, 160, 120}); // written once, however often drawn
+pdf.draw(sc::drawing::load_svg("logo.svg"), sc::rect{50, 230, 100, 100}); // vector, fitted
+pdf.add_link("https://example.com", {50, 30, 120, 25});
+pdf.new_page();
+pdf.close();                                                 // or let the destructor finish it
+```
+
+`close()` throws `std::runtime_error` when the file can't be written; the destructor finishes an
+unclosed file but can only print a failure. `set_page(n)` goes back to an earlier page (or adds
+pages up to `n`), so "page 1 of 3" can be filled in at the end. `builtin_fonts(true)` writes
+Helvetica, Times and Courier text in PDF's built-in fonts (nothing embedded), measured with Adobe's
+metrics; `image_resolution(150)` scales PNGs down to about 150 pixels an inch as drawn.
+
+Links to pages, bookmarks, the document's information and passwords (`sc::pdflite::protection`,
+see [Passwords](#passwords)):
+
+```cpp
+sc::pdflite::writer locked{"report.pdf", sc::page_size::A4, sc::orientation::portrait,
+                           {.user_password = "open", .owner_password = "admin"}};
+locked.metadata("Title", "Quarterly report");
+locked.add_outline("Summary", 1);                            // a bookmark to page 1
+locked.add_outline("By region", 2, 400, 1);                  // page 2, 400 points down, nested
+locked.add_link(2, {50, 30, 120, 25});                       // to page 2 (it needn't exist yet)
+```
+
+The demo `sc-pdflite-writer` draws a page of text, shapes, SVG drawings and a link.
 
 ## Demos
 
