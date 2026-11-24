@@ -62,6 +62,10 @@ namespace sc::pdflite {
         // Data encrypt() made, decrypted with the file key; throws std::invalid_argument when it isn't.
         [[nodiscard]] static std::string decrypt(std::string_view key, std::string_view data);
 
+        // data encrypted with a file's key (key_for()), as encrypt() does: what's added to an
+        // encrypted file later (an incremental update, a signature) is encrypted with its key.
+        [[nodiscard]] static std::string encrypt(std::string_view key, std::string_view data);
+
     private:
         std::string key_;
         pdflite::dictionary dictionary_;

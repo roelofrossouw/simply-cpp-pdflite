@@ -118,6 +118,12 @@ namespace sc::pdflite {
         return iv + aes(key_, iv, data, true, true);
     }
 
+    std::string encryption::encrypt(const std::string_view key, const std::string_view data) {
+        if (key.size() != 32) throw std::invalid_argument("sc::pdflite: an AES-256 file key is 32 bytes");
+        const std::string iv = random_bytes(16);
+        return iv + aes(key, iv, data, true, true);
+    }
+
     std::optional<std::string> encryption::key_for(const pdflite::dictionary &encrypt, const std::string_view password) {
         const auto *revision = encrypt.find("R");
         if (!revision || !revision->is<std::int64_t>() || (revision->as<std::int64_t>() != 5 && revision->as<std::int64_t>() != 6))

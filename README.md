@@ -608,6 +608,29 @@ SC_SHOW(print_only.string());
 ```
 <!-- /sc-example -->
 
+## Signatures
+
+`sign.h` signs a finished PDF: a PAdES baseline signature (ETSI EN 319 142-1; B-B, or B-T with a
+time-stamp authority), added as an incremental update after the file's last byte, so what was
+there stays as it was. An owner-password file stays encrypted, with its permissions; a second
+signature leaves the first valid for the file as it was when it signed. The key is PEM or
+PKCS#12; the signature is CMS (`ETSI.CAdES.detached`, SHA-256, the signer's certificate named by
+signing-certificate-v2, no signing time in it: the claimed time is the dictionary's `/M`).
+`verify()` checks each signature in a file: the covered bytes' digest, the signature, the
+time-stamp, and whether it covers the whole file. Who signed is reported, not trusted: that's the
+caller's (or the reader's) to decide.
+
+```cpp
+#include <sc/pdflite/sign.h>
+
+const auto key = sc::pdflite::signing_key::from_pkcs12(sc::file_get_contents("signer.p12"), "passphrase");
+sc::pdflite::signature_options options{.reason = "Approved", .location = "Head office"};
+options.timestamp = [](std::string_view request) { /* POST it to a TSA as application/timestamp-query */ return response; };
+const std::string signed_pdf = sc::pdflite::sign(pdf_bytes, key, options);
+for (const auto &check: sc::pdflite::verify(signed_pdf))
+    std::cout << check.field << ": " << (check.valid() ? "valid" : check.error) << ", " << check.subject << '\n';
+```
+
 ## Merging
 
 `sc-pdflite-merge` writes the pages of PDFs, one file after another, into a new one, with

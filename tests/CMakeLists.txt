@@ -22,6 +22,12 @@ target_compile_definitions(test-reader PRIVATE SC_PDFLITE_TEST_PDFS="${CMAKE_CUR
 set_tests_properties(test-reader PROPERTIES
         ENVIRONMENT "SC_PDFLITE_OUTPUT=${pdflite_output}"
         FIXTURES_SETUP pdflite_files)
+# sign() and verify(): PAdES signatures with throwaway keys made by the test; the signed files go
+# to the checkers too.
+add_sc_test(sign LABELS unit)
+set_tests_properties(test-sign PROPERTIES
+        ENVIRONMENT "SC_PDFLITE_OUTPUT=${pdflite_output}"
+        FIXTURES_SETUP pdflite_files)
 foreach (checker IN ITEMS qpdf pdfcpu mutool)
     find_program(${checker}_program ${checker})
     if (${checker}_program)

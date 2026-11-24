@@ -16,7 +16,8 @@ find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 
 # Streams are compressed with zlib; embedded fonts are read by FreeType (as sc-graphics reads them).
 find_package(ZLIB REQUIRED)
 config_or_install_package(freetype2 libfreetype-dev freetype)
-# Encryption (AES-256, SHA-2, random keys) by OpenSSL's libcrypto: cryptography isn't ours to write.
+# Encryption (AES-256, SHA-2, random keys) and signatures (CMS, RFC 3161 time-stamps) by OpenSSL's
+# libcrypto: cryptography isn't ours to write.
 find_or_install_package(OpenSSL libssl-dev openssl)
 
 set(SOURCE_OBJECTS)
@@ -24,7 +25,7 @@ set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
 add_sc_object(pdflite
-        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/jpeg.cpp src/png.cpp src/svg.cpp src/font.cpp src/encryption.cpp src/reader.cpp src/merge.cpp src/writer.cpp
+        SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/jpeg.cpp src/png.cpp src/svg.cpp src/font.cpp src/encryption.cpp src/reader.cpp src/merge.cpp src/writer.cpp src/sign.cpp
         LINK_LIBRARIES sc::sc-core sc::sc-geometry sc::sc-graphics ZLIB::ZLIB PkgConfig::freetype2 OpenSSL::Crypto
         PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-geometry sc::sc-graphics ZLIB::ZLIB OpenSSL::Crypto)
 
