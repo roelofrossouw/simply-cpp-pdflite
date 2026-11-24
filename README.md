@@ -1,7 +1,7 @@
 # simply-cpp-pdflite
 
 simply-cpp's own PDF writer, in C++20: strict ISO 32000-1 (PDF 1.7), with no library but zlib.
-Draw whole PDFs with `sc::pdflite::writer`, an `sc::canvas` (the same calls as an `sc::image`),
+Draw whole PDFs with `sc::pdflite::writer`, an `sc::graphics::canvas` (the same calls as an `sc::image::picture`),
 or build them object by object with `sc::pdflite::document`. (`sc::pdflite::writer` was sc-pdf's
 `sc::pdf` until sc-pdf was merged in here.)
 
@@ -12,7 +12,7 @@ What it writes so far:
 - **Pages** of one size, each with a content stream compressed with zlib; an earlier page can be
   drawn on again until the document is closed. Each page has its own size, the document's unless
   `add_page()` gives one: one of sc-graphics' paper sizes
-  (`sc::page_size::A4`, A3, A5, Letter, Legal, and `sc::orientation`, as the writer and sc-mupdf
+  (`sc::graphics::page_size::A4`, A3, A5, Letter, Legal, and `sc::graphics::orientation`, as the writer and sc-mupdf
   take them) or any width and height in points.
 - **Content:** paths (lines, curves, rectangles), RGB fill and stroke colours, line width,
   transforms, clipping (nonzero and even-odd), graphics states and text, and transparency
@@ -20,9 +20,9 @@ What it writes so far:
   refuses what PDF forbids, throwing `std::logic_error`: an unbalanced `q`/`Q`, a path inside a
   text object, text without a font, anything between `W` and the path's painting operator.
 - **PDF's built-in fonts:** the twelve Latin standard fonts (Helvetica, Times and Courier, with
-  their bold and italic styles), named by sc-graphics' `sc::standard_font::face` enum (a typo
+  their bold and italic styles), named by sc-graphics' `sc::graphics::standard_font::face` enum (a typo
   doesn't compile), in WinAnsiEncoding; `document::win_ansi()` turns UTF-8 into it.
-  Their metrics are sc-graphics' `sc::standard_font`, so text is measured as readers draw it.
+  Their metrics are sc-graphics' `sc::graphics::standard_font`, so text is measured as readers draw it.
 - **The document's information:** title, author and the like, with Unicode, plus the creation
   date and producer.
 - **JPEG images** (`pdflite/jpeg.h`, an `image` from `pdflite/image.h`), written into the file as they are and once however often
@@ -37,10 +37,10 @@ What it writes so far:
   for every page), share one image. `document::image_resolution(150)` writes PNGs at most about
   150 pixels an inch where they're shown (given with `image(picture, shown)`): one with more than
   1.5 times that is scaled down (`png::reduced()`, an area average), as Ghostscript does.
-- **SVG drawings** (`pdflite/svg.h`), read by sc-graphics (`sc::drawing`) and written as a form:
+- **SVG drawings** (`pdflite/svg.h`), read by sc-graphics (`sc::graphics::drawing`) and written as a form:
   vectors, sharp at any size, placed like a picture. Strokes, fills (nonzero or even-odd), clips,
   transparency, text in the built-in fonts and the PNGs or JPEGs in it.
-- **Embedded fonts** (`pdflite/font.h`): any font FreeType reads, found as an `sc::font` asks
+- **Embedded fonts** (`pdflite/font.h`): any font FreeType reads, found as an `sc::graphics::font` asks
   (fontconfig) or from a file, embedded as a subset of the glyphs used: a TrueType program made
   from FreeType's outlines (a variable font's at the instance asked for, a CFF font's curves turned
   quadratic), with a ToUnicode map so the text can be copied and searched, and the font's own
@@ -95,7 +95,7 @@ And what it reads (since 4.3.0):
   upright as each page is shown, scaled to fit the page's crop box and centred. Each decoration
   page is a form XObject, written once however many pages show it.
 
-Still to come: a font chosen per character when one font lacks it, and an `sc::canvas` on top.
+Still to come: a font chosen per character when one font lacks it, and an `sc::graphics::canvas` on top.
 Values are checked as they're written: a number that isn't finite, a page side readers can't show
 (outside 3 to 14,400 points) or malformed UTF-8 throws `std::invalid_argument`.
 
@@ -115,9 +115,9 @@ fonts, information), `pdflite/reader.h` (an existing file read) and `pdflite/mer
 
 ## Drawing on a canvas: sc::pdflite::writer
 
-`sc::pdflite::writer` is an `sc::canvas` from
+`sc::pdflite::writer` is an `sc::graphics::canvas` from
 [sc-graphics](https://github.com/roelofrossouw/simply-cpp-graphics): shapes, text, paths and SVG
-are drawn with the same `draw()` calls as on an `sc::image`, each shape with an `sc::appearance`
+are drawn with the same `draw()` calls as on an `sc::image::picture`, each shape with an `sc::graphics::appearance`
 (stroke and fill). Positions are in points (1/72 inch) from the page's top-left corner, y down.
 A colour's alpha is honoured for fills, strokes and text. Fonts are found through fontconfig and
 embedded (subset). Curves and SVG stay vector graphics, and SVG clip paths clip.
@@ -128,17 +128,17 @@ calls on MuPDF (AGPL-3.0), so a program can switch engines by changing one class
 #include <sc/pdflite/writer.h>
 
 sc::pdflite::writer pdf{"hello.pdf"};                        // A4 portrait
-// sc::pdflite::writer wide{"wide.pdf", sc::page_size::A3, sc::orientation::landscape};
-pdf.draw(sc::text{"Hello", {50, 80}, sc::font::bold("sans-serif", 24)});
-const sc::text body{"Body text", {50, 100}, {"serif", 11}};  // baseline at y = 100
+// sc::pdflite::writer wide{"wide.pdf", sc::graphics::page_size::A3, sc::graphics::orientation::landscape};
+pdf.draw(sc::graphics::text{"Hello", {50, 80}, sc::graphics::font::bold("sans-serif", 24)});
+const sc::graphics::text body{"Body text", {50, 100}, {"serif", 11}};  // baseline at y = 100
 pdf.draw(body);
 const double width = pdf.text_width(body);                   // in its own font
-pdf.draw(sc::line{{50, 110}, {50 + width, 110}}, sc::stroke{sc::color::Black, 0.5});
+pdf.draw(sc::line{{50, 110}, {50 + width, 110}}, sc::graphics::stroke{sc::color::Black, 0.5});
 pdf.draw(sc::rounded_rect{sc::rect{300, 130, 200, 80}, 8}, {sc::color::Black, sc::color{0.9, 0.95, 1}});
-pdf.draw(sc::circle{{400, 300}, 30}, sc::appearance::filled(sc::color{0, 0, 0, 0.5})); // half opaque
+pdf.draw(sc::circle{{400, 300}, 30}, sc::graphics::appearance::filled(sc::color{0, 0, 0, 0.5})); // half opaque
 pdf.draw_image("logo.png", {300, 130, 200, 80});             // JPEG or PNG, fitted
-pdf.draw(sc::bitmap::load("photo.jpg"), {50, 350, 160, 120}); // written once, however often drawn
-pdf.draw(sc::drawing::load_svg("logo.svg"), sc::rect{50, 230, 100, 100}); // vector, fitted
+pdf.draw(sc::graphics::bitmap::load("photo.jpg"), {50, 350, 160, 120}); // written once, however often drawn
+pdf.draw(sc::graphics::drawing::load_svg("logo.svg"), sc::rect{50, 230, 100, 100}); // vector, fitted
 pdf.add_link("https://example.com", {50, 30, 120, 25});
 pdf.new_page();
 pdf.close();                                                 // or let the destructor finish it
@@ -154,7 +154,7 @@ Links to pages, bookmarks, the document's information and passwords (`sc::pdflit
 see [Passwords](#passwords)):
 
 ```cpp
-sc::pdflite::writer locked{"report.pdf", sc::page_size::A4, sc::orientation::portrait,
+sc::pdflite::writer locked{"report.pdf", sc::graphics::page_size::A4, sc::graphics::orientation::portrait,
                            {.user_password = "open", .owner_password = "admin"}};
 locked.metadata("Title", "Quarterly report");
 locked.add_outline("Summary", 1);                            // a bookmark to page 1
@@ -174,17 +174,17 @@ drawing. It's installed with the runtime package (`simply-cpp-pdflite`). Its cod
 <!-- sc-example: examples/sc-pdflite-demo.cpp -->
 ```cpp
 sc::console::heading("A document of A4 pages: sc-graphics' paper sizes, or any size in points");
-sc::pdflite::document pdf{output, sc::page_size::A4};
-sc::console::step("sc::pdflite::document pdf{output, sc::page_size::A4};   // " + output.string());
+sc::pdflite::document pdf{output, sc::graphics::page_size::A4};
+sc::console::step("sc::pdflite::document pdf{output, sc::graphics::page_size::A4};   // " + output.string());
 SC_SHOW(pdf.size());          // distances, in points (1/72 inch)
 SC_SHOW(pdf.size().in<mm>()); // the same, in millimetres
 
 sc::console::heading("Text: a built-in font, then BT ... ET");
 auto &page = pdf.page_content();
-const auto bold = pdf.standard_font(sc::standard_font::face::helvetica_bold);
+const auto bold = pdf.standard_font(sc::graphics::standard_font::face::helvetica_bold);
 SC_SHOW(bold); // its name in the page's resources
 const std::string heading = "simply-cpp pdflite";
-const sc::standard_font metrics{sc::standard_font::face::helvetica_bold}; // Adobe's metrics for it
+const sc::graphics::standard_font metrics{sc::graphics::standard_font::face::helvetica_bold}; // Adobe's metrics for it
 const sc::distance width = metrics.width(heading, 28);
 SC_SHOW(width); // Adobe's widths: lines are measured as readers draw them
 page.begin_text();
@@ -193,7 +193,7 @@ page.text_position((pdf.size().width() - width) / 2, 82); // centred, the baseli
 page.show(*sc::pdflite::document::win_ansi(heading));
 page.end_text();
 
-const auto serif = pdf.standard_font(sc::standard_font::face::times_roman);
+const auto serif = pdf.standard_font(sc::graphics::standard_font::face::times_roman);
 page.begin_text();
 page.font(serif, 13);
 page.text_position(inch(1), 122); // a unit from sc::dist, or a plain number of points
@@ -234,7 +234,7 @@ SC_SHOW(page.complete()); // q balanced, no open text or path: ready to close
 sc::console::heading("A second page, and the document's information");
 SC_STEP(pdf.add_page());
 auto &second = pdf.page_content();
-const auto mono = pdf.standard_font(sc::standard_font::face::courier);
+const auto mono = pdf.standard_font(sc::graphics::standard_font::face::courier);
 second.begin_text();
 second.font(mono, 11);
 second.text_position(72, 82);
@@ -257,7 +257,7 @@ on each chapter, a web link, and bookmarks for the reader's outline. Its code, c
 
 <!-- sc-example: examples/sc-pdflite-links.cpp -->
 ```cpp
-sc::pdflite::document pdf{output, sc::page_size::A4};
+sc::pdflite::document pdf{output, sc::graphics::page_size::A4};
 const double top = 72; // the headings' baselines, an inch from the top
 const std::vector<std::string> chapters{"Getting started", "Drawing", "Text and fonts"};
 
@@ -267,23 +267,23 @@ SC_SHOW(pdf.page_count());
 
 sc::console::heading("The contents page: each line a link to its chapter (link(area, page, top))");
 pdf.set_page(1);
-write_line(pdf, sc::standard_font::face::helvetica_bold, 24, 72, top, "Contents");
+write_line(pdf, sc::graphics::standard_font::face::helvetica_bold, 24, 72, top, "Contents");
 for (std::size_t i = 0; i < chapters.size(); ++i) {
-    const auto line = write_line(pdf, sc::standard_font::face::times_roman, 14, 90, top + 50 + 24.0 * i, std::to_string(i + 1) + ". " + chapters[i]);
+    const auto line = write_line(pdf, sc::graphics::standard_font::face::times_roman, 14, 90, top + 50 + 24.0 * i, std::to_string(i + 1) + ". " + chapters[i]);
     SC_STEP(pdf.link(line, i + 2, top - 20)); // the chapter's page, from just above its heading
 }
 
 sc::console::heading("A web link (link(area, url)): the address is written in ASCII, percent-encoded");
-const auto site = write_line(pdf, sc::standard_font::face::helvetica, 11, 72, pdf.size().height() - 100, "simply-cpp on GitHub");
+const auto site = write_line(pdf, sc::graphics::standard_font::face::helvetica, 11, 72, pdf.size().height() - 100, "simply-cpp on GitHub");
 SC_STEP(pdf.link(site, "https://github.com/roelofrossouw/simply-cpp"));
 
 sc::console::heading("Chapters, each with a way back to the contents");
 for (std::size_t i = 0; i < chapters.size(); ++i) {
     pdf.set_page(i + 2);
-    write_line(pdf, sc::standard_font::face::helvetica_bold, 20, 72, top, std::to_string(i + 1) + ". " + chapters[i]);
-    write_line(pdf, sc::standard_font::face::times_roman, 12, 72, top + 40, "Section " + std::to_string(i + 1) + ".1");
-    write_line(pdf, sc::standard_font::face::times_roman, 12, 72, top + 300, "Section " + std::to_string(i + 1) + ".2");
-    const auto back = write_line(pdf, sc::standard_font::face::helvetica, 10, 72, pdf.size().height() - 60, "Back to the contents");
+    write_line(pdf, sc::graphics::standard_font::face::helvetica_bold, 20, 72, top, std::to_string(i + 1) + ". " + chapters[i]);
+    write_line(pdf, sc::graphics::standard_font::face::times_roman, 12, 72, top + 40, "Section " + std::to_string(i + 1) + ".1");
+    write_line(pdf, sc::graphics::standard_font::face::times_roman, 12, 72, top + 300, "Section " + std::to_string(i + 1) + ".2");
+    const auto back = write_line(pdf, sc::graphics::standard_font::face::helvetica, 10, 72, pdf.size().height() - 60, "Back to the contents");
     pdf.link(back, 1); // the top of the contents page
 }
 
@@ -313,18 +313,18 @@ the middle, and a link from the first to the second. Its code, copied from
 <!-- sc-example: examples/sc-pdflite-pages.cpp -->
 ```cpp
 sc::console::heading("Page 1: the document's size, A4 portrait");
-sc::pdflite::document pdf{output, sc::page_size::A4};
+sc::pdflite::document pdf{output, sc::graphics::page_size::A4};
 SC_SHOW(pdf.size().in<mm>()); // the current page's size, in mm
 frame_and_size(pdf, "A4 portrait");
 
 sc::console::heading("Page 2: a size of its own, A3 landscape (add_page(paper, orientation))");
-SC_STEP(pdf.add_page(sc::page_size::A3, sc::orientation::landscape));
+SC_STEP(pdf.add_page(sc::graphics::page_size::A3, sc::graphics::orientation::landscape));
 SC_SHOW(pdf.size().in<mm>()); // now page 2's
 frame_and_size(pdf, "A3 landscape");
 
 sc::console::heading("Links and bookmarks find each page's own size");
 pdf.set_page(1);
-const auto font = pdf.standard_font(sc::standard_font::face::helvetica);
+const auto font = pdf.standard_font(sc::graphics::standard_font::face::helvetica);
 auto &first = pdf.page_content();
 first.begin_text();
 first.font(font, 12);
@@ -352,7 +352,7 @@ copied from `examples/sc-pdflite-images.cpp` at configure time:
 
 <!-- sc-example: examples/sc-pdflite-images.cpp -->
 ```cpp
-sc::pdflite::document pdf{output, sc::page_size::A4};
+sc::pdflite::document pdf{output, sc::graphics::page_size::A4};
 
 sc::console::heading("A JPEG, written as it is: its header is read for the size and colours");
 const auto photo = sc::pdflite::jpeg::load(args.as<std::string>("photo"));
@@ -384,10 +384,10 @@ SC_STEP(page.draw(cat, filling(scaled_box).then(sc::transform::scale(0.5, scaled
 caption(pdf, scaled_box, "Half the size, about its centre: scale");
 
 sc::console::heading("A picture drawn with sc-image, encoded as a JPEG in memory");
-sc::image drawn{{480, 320}, sc::color{0.85, 0.93, 0.98}};
-drawn.draw(sc::circle{{160, 160}, 110}, {sc::stroke{sc::color{0.16, 0.44, 0.59}, 8}, sc::color{0.96, 0.83, 0.37}});
-drawn.draw(sc::rect{250, 70, 180, 180}, sc::appearance::filled(sc::color{0.93, 0.42, 0.3}));
-drawn.draw(sc::text{"sc-image", {40, 300}, sc::font::bold("sans-serif", 28)}, sc::color{0.1, 0.1, 0.1});
+sc::image::picture drawn{{480, 320}, sc::color{0.85, 0.93, 0.98}};
+drawn.draw(sc::circle{{160, 160}, 110}, {sc::graphics::stroke{sc::color{0.16, 0.44, 0.59}, 8}, sc::color{0.96, 0.83, 0.37}});
+drawn.draw(sc::rect{250, 70, 180, 180}, sc::graphics::appearance::filled(sc::color{0.93, 0.42, 0.3}));
+drawn.draw(sc::graphics::text{"sc-image", {40, 300}, sc::graphics::font::bold("sans-serif", 28)}, sc::color{0.1, 0.1, 0.1});
 const auto picture = sc::pdflite::jpeg(drawn.encoded("jpg", 90));
 SC_SHOW(picture.size());
 const sc::rect picture_box{mm(55), mm(190), mm(100), mm(100) * 320 / 480};
@@ -417,7 +417,7 @@ copied from `examples/sc-pdflite-png.cpp` at configure time:
 
 <!-- sc-example: examples/sc-pdflite-png.cpp -->
 ```cpp
-sc::pdflite::document pdf{output, sc::page_size::A4};
+sc::pdflite::document pdf{output, sc::graphics::page_size::A4};
 auto &page = pdf.page_content();
 stripes(page, sc::rect{mm(15), mm(15), mm(180), mm(200)});
 
@@ -470,7 +470,7 @@ code, copied from `examples/sc-pdflite-svg.cpp` at configure time:
 
 <!-- sc-example: examples/sc-pdflite-svg.cpp -->
 ```cpp
-sc::pdflite::document pdf{output, sc::page_size::A4};
+sc::pdflite::document pdf{output, sc::graphics::page_size::A4};
 auto &page = pdf.page_content();
 
 sc::console::heading("An SVG file, read by sc-graphics: a form of vectors, drawn like a picture");
@@ -523,10 +523,10 @@ Its code, copied from `examples/sc-pdflite-fonts.cpp` at configure time:
 
 <!-- sc-example: examples/sc-pdflite-fonts.cpp -->
 ```cpp
-sc::pdflite::document pdf{output, sc::page_size::A4};
+sc::pdflite::document pdf{output, sc::graphics::page_size::A4};
 
-sc::console::heading("A font as an sc::font asks for it: fontconfig finds it, FreeType reads it");
-const sc::pdflite::font title{sc::font::bold("sans-serif", 26)};
+sc::console::heading("A font as an sc::graphics::font asks for it: fontconfig finds it, FreeType reads it");
+const sc::pdflite::font title{sc::graphics::font::bold("sans-serif", 26)};
 SC_SHOW(title.name()); // its PostScript name
 const std::string heading = "Embedded fonts, as subsets";
 const auto width = title.width(heading, 26);
@@ -534,13 +534,13 @@ SC_SHOW(width);
 write(pdf, title, 26, (pdf.size().width() - width) / 2, mm(30), heading); // centred
 
 sc::console::heading("Text in it is glyphs: encode() picks them and records them for the subset");
-const sc::pdflite::font serif{sc::font{"serif", 13}};
+const sc::pdflite::font serif{sc::graphics::font{"serif", 13}};
 SC_SHOW(serif.name());
 write(pdf, serif, 13, mm(20), mm(45), "Only the glyphs this page uses go into the file, and a ToUnicode map lets");
 write(pdf, serif, 13, mm(20), mm(51), "readers copy and search the text: café, naïve, “quotes”, € 12,50.");
 
 sc::console::heading("Other alphabets, where the font has them (covers())");
-const sc::pdflite::font sans{sc::font{"sans-serif", 14}};
+const sc::pdflite::font sans{sc::graphics::font{"sans-serif", 14}};
 const std::string greek = "Καλημέρα κόσμε", cyrillic = "Привет, мир";
 SC_SHOW(sans.covers(greek));
 SC_SHOW(sans.covers(cyrillic));
@@ -550,14 +550,14 @@ write(pdf, sans, 14, mm(20), mm(74), "Cyrillic: " + cyrillic);
 sc::console::heading("Weights: each the face fontconfig finds for it");
 sc::distance y = mm(92);
 for (const int weight: {300, 400, 600, 800}) {
-    const sc::pdflite::font face{sc::font{"sans-serif", 16, weight}};
+    const sc::pdflite::font face{sc::graphics::font{"sans-serif", 16, weight}};
     SC_SHOW(face.name());
     write(pdf, face, 16, mm(20), y, "Weight " + std::to_string(weight) + ": " + face.name());
     y = y + mm(9);
 }
 
 sc::console::heading("A fixed-width face, measured");
-const sc::pdflite::font mono{sc::font{"monospace", 11}};
+const sc::pdflite::font mono{sc::graphics::font{"monospace", 11}};
 SC_SHOW(mono.width("iiii", 11) == mono.width("MMMM", 11)); // every glyph as wide
 write(pdf, mono, 11, mm(20), mm(135), "for (const auto &glyph: subset) write(glyph);");
 
@@ -579,7 +579,7 @@ but only print. Its code, copied from `examples/sc-pdflite-passwords.cpp` at con
 ```cpp
 sc::console::heading("A password to open it: everything in the file is encrypted");
 const auto locked = folder / "sc-pdflite-locked.pdf";
-sc::pdflite::document pdf{locked, sc::page_size::A5};
+sc::pdflite::document pdf{locked, sc::graphics::page_size::A5};
 page_of_text(pdf, "Opened with the password “open sesame”.");
 pdf.info("Title", "sc-pdflite: a password to open");
 pdf.info("Author", "Roelof Rossouw");
@@ -591,7 +591,7 @@ SC_SHOW(locked.string());
 
 sc::console::heading("Anyone may open it, and print; the rest takes the owner's password");
 const auto print_only = folder / "sc-pdflite-print-only.pdf";
-sc::pdflite::document open{print_only, sc::page_size::A5};
+sc::pdflite::document open{print_only, sc::graphics::page_size::A5};
 page_of_text(open, "Anyone can open and print this; copying needs “admin”.");
 open.info("Title", "sc-pdflite: print only");
 open.info("Author", "Roelof Rossouw");

@@ -16,24 +16,24 @@ namespace sc::pdflite {
         // Text in WinAnsiEncoding, a character it doesn't have as '?'.
         std::string win_ansi_text(const std::string &utf8) {
             std::string out;
-            for (const char32_t code: code_points(utf8)) out += sc::standard_font::encode(code).value_or('?');
+            for (const char32_t code: code_points(utf8)) out += sc::graphics::standard_font::encode(code).value_or('?');
             return out;
         }
 
         // The built-in font for a label's font: its own (Helvetica, Times, Courier and their
         // look-alikes), else Helvetica of its weight and slant.
-        sc::standard_font::face face_of(const sc::font &spec) {
-            if (const auto standard = sc::standard_font::of(spec)) return standard->which();
-            return sc::standard_font::of(sc::font{"Helvetica", spec.size, spec.weight, spec.italic})->which();
+        sc::graphics::standard_font::face face_of(const sc::graphics::font &spec) {
+            if (const auto standard = sc::graphics::standard_font::of(spec)) return standard->which();
+            return sc::graphics::standard_font::of(sc::graphics::font{"Helvetica", spec.size, spec.weight, spec.italic})->which();
         }
 
         // What a form's content names, collected while it's written.
         struct form_resources {
-            std::map<sc::standard_font::face, std::string> fonts;
+            std::map<sc::graphics::standard_font::face, std::string> fonts;
             std::map<std::pair<double, double>, std::string> states; // fill and stroke alpha
             std::map<const std::string *, std::pair<std::shared_ptr<const image>, std::string>> images; // by a bitmap's bytes
 
-            std::string font(const sc::standard_font::face which) {
+            std::string font(const sc::graphics::standard_font::face which) {
                 return fonts.try_emplace(which, "F" + std::to_string(fonts.size() + 1)).first->second;
             }
 
@@ -43,11 +43,11 @@ namespace sc::pdflite {
                 return states.try_emplace({fill, stroke}, "GS" + std::to_string(states.size() + 1)).first->second;
             }
 
-            std::string picture(const sc::bitmap &bitmap) {
+            std::string picture(const sc::graphics::bitmap &bitmap) {
                 const std::string *key = &bitmap.bytes();
                 if (const auto found = images.find(key); found != images.end()) return found->second.second;
                 std::shared_ptr<const pdflite::image> picture;
-                if (bitmap.type() == sc::bitmap::format::png) picture = std::make_shared<png>(bitmap.bytes());
+                if (bitmap.type() == sc::graphics::bitmap::format::png) picture = std::make_shared<png>(bitmap.bytes());
                 else picture = std::make_shared<jpeg>(bitmap.bytes());
                 return images.emplace(key, std::pair{picture, "Im" + std::to_string(images.size() + 1)}).first->second.second;
             }
@@ -56,16 +56,16 @@ namespace sc::pdflite {
         void clip_to(content &out, const std::optional<sc::path> &clip) {
             if (!clip) return;
             out.path(*clip);
-            out.clip(); // nonzero, as sc::canvas clips
+            out.clip(); // nonzero, as sc::graphics::canvas clips
             out.end_path();
         }
     }
 
-    svg svg::load(const std::filesystem::path &path) { return svg{sc::drawing::load_svg(path)}; }
+    svg svg::load(const std::filesystem::path &path) { return svg{sc::graphics::drawing::load_svg(path)}; }
 
-    svg svg::parse(const std::string_view text) { return svg{sc::drawing::from_svg(text)}; }
+    svg svg::parse(const std::string_view text) { return svg{sc::graphics::drawing::from_svg(text)}; }
 
-    svg::svg(sc::drawing drawing) : drawing_(std::make_shared<const sc::drawing>(std::move(drawing))) {
+    svg::svg(sc::graphics::drawing drawing) : drawing_(std::make_shared<const sc::graphics::drawing>(std::move(drawing))) {
         if (!(drawing_->page().width() > 0 && drawing_->page().height() > 0)) throw std::invalid_argument("sc::pdflite: an SVG drawing without a size");
     }
 
@@ -78,7 +78,7 @@ namespace sc::pdflite {
         content page{h};
         form_resources used;
         for (const auto &item: drawing_->items()) {
-            if (const auto *shape = std::get_if<sc::drawable>(&item)) {
+            if (const auto *shape = std::get_if<sc::graphics::drawable>(&item)) {
                 const auto &look = shape->appearance;
                 const bool stroked = look.stroke().visible(), filled = look.fill().visible();
                 if (!stroked && !filled) continue;
@@ -92,9 +92,9 @@ namespace sc::pdflite {
                     page.line_width(look.stroke().width());
                 }
                 page.path(sc::to_path(shape->shape));
-                page.paint(filled, stroked, look.fill().rule() == sc::fill_rule::even_odd);
+                page.paint(filled, stroked, look.fill().rule() == sc::graphics::fill_rule::even_odd);
                 page.restore();
-            } else if (const auto *text = std::get_if<sc::label>(&item)) {
+            } else if (const auto *text = std::get_if<sc::graphics::label>(&item)) {
                 if (!text->fill.visible() || text->text.content.empty()) continue;
                 const auto &colour = text->fill.colour();
                 page.save();
@@ -107,7 +107,7 @@ namespace sc::pdflite {
                 page.show(win_ansi_text(text->text.content));
                 page.end_text();
                 page.restore();
-            } else if (const auto *figure = std::get_if<sc::figure>(&item)) {
+            } else if (const auto *figure = std::get_if<sc::graphics::figure>(&item)) {
                 page.save();
                 clip_to(page, figure->clip);
                 page.draw(used.picture(figure->bitmap), figure->placement);
@@ -120,7 +120,7 @@ namespace sc::pdflite {
             dictionary fonts;
             for (const auto &[which, resource]: used.fonts) {
                 const std::uint32_t font = out.allocate();
-                out.write(font, dictionary{{"Type", name{"Font"}}, {"Subtype", name{"Type1"}}, {"BaseFont", name{sc::standard_font::name(which)}},
+                out.write(font, dictionary{{"Type", name{"Font"}}, {"Subtype", name{"Type1"}}, {"BaseFont", name{sc::graphics::standard_font::name(which)}},
                                            {"Encoding", name{"WinAnsiEncoding"}}});
                 fonts.add(resource, reference{font});
             }

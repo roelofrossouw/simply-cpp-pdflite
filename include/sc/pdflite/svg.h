@@ -10,12 +10,12 @@
 #include <string_view>
 
 namespace sc::pdflite {
-    // An SVG drawing, read by sc-graphics (sc::drawing), written as a form XObject (ISO 32000-1,
+    // An SVG drawing, read by sc-graphics (sc::graphics::drawing), written as a form XObject (ISO 32000-1,
     // 8.10): vectors, so it stays sharp at any size, drawn with content::draw() like any picture.
     // Its shapes keep their strokes, fills (nonzero or even-odd), clips and transparency (graphics
-    // states); its text is written in PDF's built-in fonts (sc::standard_font::of() the label's
+    // states); its text is written in PDF's built-in fonts (sc::graphics::standard_font::of() the label's
     // font, else Helvetica of its weight and slant), a character they don't have as '?'; a PNG or
-    // JPEG in it becomes an image in the form. What sc::drawing doesn't read (see drawing.h) isn't
+    // JPEG in it becomes an image in the form. What sc::graphics::drawing doesn't read (see drawing.h) isn't
     // drawn; a gradient fills with its middle colour, as the other PDF engines draw it.
     class svg : public image {
     public:
@@ -25,13 +25,13 @@ namespace sc::pdflite {
         // SVG text.
         [[nodiscard]] static svg parse(std::string_view text);
 
-        // A drawing of its own (sc::drawing can be drawn on, too).
-        explicit svg(sc::drawing drawing);
+        // A drawing of its own (sc::graphics::drawing can be drawn on, too).
+        explicit svg(sc::graphics::drawing drawing);
 
         // Its page's size, in the drawing's units (CSS pixels for an SVG).
         [[nodiscard]] sc::size size() const override;
 
-        [[nodiscard]] const sc::drawing &drawing() const { return *drawing_; }
+        [[nodiscard]] const sc::graphics::drawing &drawing() const { return *drawing_; }
 
         [[nodiscard]] std::string_view prefix() const override { return "Fm"; }
 
@@ -43,7 +43,7 @@ namespace sc::pdflite {
         [[nodiscard]] const void *identity() const override { return drawing_.get(); }
 
     private:
-        std::shared_ptr<const sc::drawing> drawing_;
+        std::shared_ptr<const sc::graphics::drawing> drawing_;
     };
 }
 

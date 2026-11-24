@@ -3,7 +3,7 @@
 
 #include <sc/pdflite/resource.h>
 
-#include <sc/core/size.h>
+#include <sc/geometry/size.h>
 
 #include <memory>
 #include <string_view>

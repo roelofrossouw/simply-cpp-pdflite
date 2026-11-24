@@ -1,10 +1,10 @@
 #ifndef SC_PDFLITE_CONTENT_H
 #define SC_PDFLITE_CONTENT_H
 
-#include <sc/core/distance.h>
-#include <sc/core/path.h>
-#include <sc/core/rect.h>
-#include <sc/core/transform.h>
+#include <sc/geometry/distance.h>
+#include <sc/geometry/path.h>
+#include <sc/geometry/rect.h>
+#include <sc/geometry/transform.h>
 
 #include <string>
 #include <string_view>

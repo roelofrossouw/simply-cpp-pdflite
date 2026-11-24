@@ -10,10 +10,10 @@
 #include <memory>
 #include <sc/pdflite/object.h>
 
-#include <sc/core/distance.h>
+#include <sc/geometry/distance.h>
 #include <sc/graphics/page.h>
-#include <sc/core/rect.h>
-#include <sc/core/size.h>
+#include <sc/geometry/rect.h>
+#include <sc/geometry/size.h>
 #include <sc/graphics/standard_font.h>
 
 #include <cstdint>
@@ -43,8 +43,8 @@ namespace sc::pdflite {
 
         // A standard paper size (sc-graphics' page.h, shared with the writer and sc-mupdf), portrait
         // or turned to landscape.
-        explicit document(const std::filesystem::path &path, sc::page_size paper = sc::page_size::A4,
-                          sc::orientation turned = sc::orientation::portrait);
+        explicit document(const std::filesystem::path &path, sc::graphics::page_size paper = sc::graphics::page_size::A4,
+                          sc::graphics::orientation turned = sc::graphics::orientation::portrait);
 
         // Closes the file if close() wasn't called, reporting a failure on std::cerr.
         ~document();
@@ -60,7 +60,7 @@ namespace sc::pdflite {
 
         void add_page(const sc::size_<sc::distance> &size);
 
-        void add_page(sc::page_size paper, sc::orientation turned = sc::orientation::portrait);
+        void add_page(sc::graphics::page_size paper, sc::graphics::orientation turned = sc::graphics::orientation::portrait);
 
         // Makes page (counting from 1) current; throws std::out_of_range when there's no such page.
         void set_page(std::size_t page);
@@ -77,9 +77,9 @@ namespace sc::pdflite {
 
         // The resource name ("F1") of a built-in font in the current page's resources, adding it
         // there (and to the file, once) the first time: one of sc-graphics' twelve Latin standard
-        // fonts (sc::standard_font::face::helvetica_bold, ...), written in WinAnsiEncoding. Their
-        // metrics are sc::standard_font's: sc::standard_font{face}.width(text, size).
-        std::string standard_font(sc::standard_font::face which);
+        // fonts (sc::graphics::standard_font::face::helvetica_bold, ...), written in WinAnsiEncoding. Their
+        // metrics are sc::graphics::standard_font's: sc::graphics::standard_font{face}.width(text, size).
+        std::string standard_font(sc::graphics::standard_font::face which);
 
         // The resource name ("F2") of an embedded font in the current page's resources, adding it
         // there (and to the file, once) the first time; put its text into glyphs with
@@ -155,7 +155,7 @@ namespace sc::pdflite {
             std::uint32_t id;
             double width, height;
             pdflite::content content;
-            std::map<sc::standard_font::face, std::string> fonts; // each font: its resource name here
+            std::map<sc::graphics::standard_font::face, std::string> fonts; // each font: its resource name here
             std::map<const void *, std::string> images;           // each picture (by its identity): its name here
             std::map<const void *, std::string> embedded;         // each embedded font (by its identity): its name here
             std::map<std::pair<double, double>, std::string> states; // each graphics state (fill, stroke alpha): its name here
@@ -191,7 +191,7 @@ namespace sc::pdflite {
         std::uint32_t pages_id_;
         std::vector<page_state> pages_;
         std::size_t current_ = 0;
-        std::map<sc::standard_font::face, std::uint32_t> fonts_; // each font: its object
+        std::map<sc::graphics::standard_font::face, std::uint32_t> fonts_; // each font: its object
         struct written_image {
             std::shared_ptr<const pdflite::image> picture; // held, so its identity stays unique
             std::uint32_t id;

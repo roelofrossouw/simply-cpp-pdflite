@@ -12,7 +12,7 @@
 #include <sc/core/params.h>
 #include <sc/core/sc.h>
 
-#include <sc/core/distance.h>
+#include <sc/geometry/distance.h>
 #include <sc/pdflite/pdflite.h>
 #include <sc/graphics/standard_font.h>
 
@@ -39,7 +39,7 @@ namespace {
     }
 
     void caption(sc::pdflite::document &pdf, const sc::rect &box, const std::string &text) {
-        const sc::standard_font font{sc::standard_font::face::helvetica};
+        const sc::graphics::standard_font font{sc::graphics::standard_font::face::helvetica};
         auto &page = pdf.page_content();
         page.begin_text();
         page.font(pdf.standard_font(font.which()), 10);
@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
         sc::timer sw;
 
         // [readme]
-        sc::pdflite::document pdf{output, sc::page_size::A4};
+        sc::pdflite::document pdf{output, sc::graphics::page_size::A4};
         auto &page = pdf.page_content();
         stripes(page, sc::rect{mm(15), mm(15), mm(180), mm(200)});
 

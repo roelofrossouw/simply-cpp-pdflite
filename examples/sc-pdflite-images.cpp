@@ -13,7 +13,7 @@
 #include <sc/core/params.h>
 #include <sc/core/sc.h>
 
-#include <sc/core/distance.h>
+#include <sc/geometry/distance.h>
 #include <sc/image/opencv.h>
 #include <sc/pdflite/pdflite.h>
 #include <sc/graphics/standard_font.h>
@@ -24,7 +24,7 @@ using namespace sc::dist;
 namespace {
     // A caption in Helvetica, centred under box.
     void caption(sc::pdflite::document &pdf, const sc::rect &box, const std::string &text) {
-        const sc::standard_font font{sc::standard_font::face::helvetica};
+        const sc::graphics::standard_font font{sc::graphics::standard_font::face::helvetica};
         auto &page = pdf.page_content();
         page.begin_text();
         page.font(pdf.standard_font(font.which()), 10);
@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
         sc::timer sw;
 
         // [readme]
-        sc::pdflite::document pdf{output, sc::page_size::A4};
+        sc::pdflite::document pdf{output, sc::graphics::page_size::A4};
 
         sc::console::heading("A JPEG, written as it is: its header is read for the size and colours");
         const auto photo = sc::pdflite::jpeg::load(args.as<std::string>("photo"));
@@ -86,10 +86,10 @@ int main(int argc, char **argv) {
         caption(pdf, scaled_box, "Half the size, about its centre: scale");
 
         sc::console::heading("A picture drawn with sc-image, encoded as a JPEG in memory");
-        sc::image drawn{{480, 320}, sc::color{0.85, 0.93, 0.98}};
-        drawn.draw(sc::circle{{160, 160}, 110}, {sc::stroke{sc::color{0.16, 0.44, 0.59}, 8}, sc::color{0.96, 0.83, 0.37}});
-        drawn.draw(sc::rect{250, 70, 180, 180}, sc::appearance::filled(sc::color{0.93, 0.42, 0.3}));
-        drawn.draw(sc::text{"sc-image", {40, 300}, sc::font::bold("sans-serif", 28)}, sc::color{0.1, 0.1, 0.1});
+        sc::image::picture drawn{{480, 320}, sc::color{0.85, 0.93, 0.98}};
+        drawn.draw(sc::circle{{160, 160}, 110}, {sc::graphics::stroke{sc::color{0.16, 0.44, 0.59}, 8}, sc::color{0.96, 0.83, 0.37}});
+        drawn.draw(sc::rect{250, 70, 180, 180}, sc::graphics::appearance::filled(sc::color{0.93, 0.42, 0.3}));
+        drawn.draw(sc::graphics::text{"sc-image", {40, 300}, sc::graphics::font::bold("sans-serif", 28)}, sc::color{0.1, 0.1, 0.1});
         const auto picture = sc::pdflite::jpeg(drawn.encoded("jpg", 90));
         SC_SHOW(picture.size());
         const sc::rect picture_box{mm(55), mm(190), mm(100), mm(100) * 320 / 480};

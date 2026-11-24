@@ -3,7 +3,7 @@
 
 #include <sc/pdflite/resource.h>
 
-#include <sc/core/distance.h>
+#include <sc/geometry/distance.h>
 #include <sc/graphics/font.h>
 
 #include <filesystem>
@@ -30,9 +30,9 @@ namespace sc::pdflite {
         // FreeType and fontconfig number them). Throws std::runtime_error when FreeType can't read it.
         [[nodiscard]] static font load(const std::filesystem::path &file, long index = 0);
 
-        // The installed font closest to spec, as fontconfig finds it (sc-graphics' sc::font::face()):
-        // sc::pdflite::font{sc::font{"sans-serif", 12, 700}}. Throws std::runtime_error when there's none.
-        explicit font(const sc::font &spec);
+        // The installed font closest to spec, as fontconfig finds it (sc-graphics' sc::graphics::font::face()):
+        // sc::pdflite::font{sc::graphics::font{"sans-serif", 12, 700}}. Throws std::runtime_error when there's none.
+        explicit font(const sc::graphics::font &spec);
 
         // Its PostScript name ("DejaVuSans-Bold").
         [[nodiscard]] const std::string &name() const;

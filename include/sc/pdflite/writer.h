@@ -5,7 +5,7 @@
 #include <sc/graphics/canvas.h>
 #include <sc/graphics/font.h>
 #include <sc/graphics/page.h>
-#include <sc/core/rect.h>
+#include <sc/geometry/rect.h>
 #include <sc/graphics/text.h>
 
 #include <filesystem>
@@ -14,21 +14,21 @@
 #include <string_view>
 
 namespace sc::pdflite {
-    // A PDF file drawn as an sc::canvas: the same drawing and measuring calls as an sc::image (or
+    // A PDF file drawn as an sc::graphics::canvas: the same drawing and measuring calls as an sc::image::picture (or
     // sc::mupdf::writer, MuPDF's), plus images, links and bookmarks, written by sc::pdflite::document.
     // Positions are in points (1/72 inch) from the page's top-left corner, y down. A colour's alpha
     // is honoured; fonts are found through fontconfig and embedded as subsets of the glyphs used.
     // Drawing goes to the current page: the newest, unless set_page() moved back. close() finishes
     // the file, or else the destructor, which can't report a failure.
-    class writer : public sc::canvas {
+    class writer : public sc::graphics::canvas {
     public:
         // Starts the file with one page; every page has this size and orientation (page.h). Throws
         // std::runtime_error when the file can't be created.
-        explicit writer(const std::filesystem::path &filename, page_size size = page_size::A4, orientation turned = orientation::portrait);
+        explicit writer(const std::filesystem::path &filename, graphics::page_size size = graphics::page_size::A4, graphics::orientation turned = graphics::orientation::portrait);
 
         // The same, encrypted (AES-256, as PDF 2.0 and Adobe's extension level 8 have it) with these
         // passwords and permissions (encryption.h). With neither password the file isn't encrypted.
-        writer(const std::filesystem::path &filename, page_size size, orientation turned, const protection &locked);
+        writer(const std::filesystem::path &filename, graphics::page_size size, graphics::orientation turned, const protection &locked);
 
         ~writer() override;
 
@@ -77,7 +77,7 @@ namespace sc::pdflite {
         // Text in Helvetica, Times or Courier (any case; Arial, Times New Roman and Courier New
         // too), bold and italic as asked, is written in PDF's built-in fonts, which every reader has:
         // nothing embedded, smaller files. It's placed and measured with Adobe's metrics for them
-        // (sc::standard_font), so it fits as readers draw it. Characters outside Windows-1252, which
+        // (sc::graphics::standard_font), so it fits as readers draw it. Characters outside Windows-1252, which
         // the built-in fonts are written in, are drawn in the installed font, embedded. Off by default.
         void builtin_fonts(bool on);
 
@@ -97,32 +97,32 @@ namespace sc::pdflite {
         // Strokes are a colour and a width, fills a colour and a fill rule (even-odd or nonzero);
         // alpha below 1 goes through a graphics state (ExtGState). Other stroke and fill styles
         // aren't drawn yet. Text throws std::runtime_error when no font is found.
-        void paint_polygon(const polygon &shape, const sc::appearance &look) override;
+        void paint_polygon(const polygon &shape, const sc::graphics::appearance &look) override;
 
-        void paint_circle(const circle &shape, const sc::appearance &look) override;
+        void paint_circle(const circle &shape, const sc::graphics::appearance &look) override;
 
-        void paint_line(const line &shape, const sc::stroke &stroke) override;
+        void paint_line(const line &shape, const sc::graphics::stroke &stroke) override;
 
-        void paint_text(const text &sample, const sc::fill &fill) override;
+        void paint_text(const graphics::text &sample, const sc::graphics::fill &fill) override;
 
         // Each bitmap is written into the file once (one of the same bytes as another counts as
         // it), a JPEG as it is, and used from every page.
         // Throws std::runtime_error when it can't be read.
-        void paint_bitmap(const bitmap &picture, const transform &placement) override;
+        void paint_bitmap(const graphics::bitmap &picture, const transform &placement) override;
 
         // In points, in the font fontconfig finds (std::runtime_error when there's none). x and cap
         // heights are what the font declares, or else the letter's own height.
-        double measure_width(const text &sample) override;
+        double measure_width(const graphics::text &sample) override;
 
-        double measure_x_height(const sc::font &font) override;
+        double measure_x_height(const sc::graphics::font &font) override;
 
-        double measure_cap_height(const sc::font &font) override;
+        double measure_cap_height(const sc::graphics::font &font) override;
 
         // Real quarter circles, not the polygon a canvas draws by default.
-        void paint_rounded_rect(const rounded_rect &shape, const sc::appearance &look) override;
+        void paint_rounded_rect(const rounded_rect &shape, const sc::graphics::appearance &look) override;
 
         // Real curves.
-        void paint_path(const path &shape, const sc::appearance &look) override;
+        void paint_path(const path &shape, const sc::graphics::appearance &look) override;
 
     public:
         // Clips are nonzero and nest.

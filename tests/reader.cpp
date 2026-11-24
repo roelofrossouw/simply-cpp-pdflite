@@ -72,12 +72,12 @@ namespace {
 
     // A 3-page PDF of pdflite's own: a word on each page, a link from page 1 to page 3, a bookmark.
     fs::path own(const fs::path &where, const std::string &word, const std::optional<protection> &settings = std::nullopt) {
-        document pdf{where, sc::page_size::A5};
+        document pdf{where, sc::graphics::page_size::A5};
         pdf.add_page();
         pdf.add_page();
         for (std::size_t page = 1; page <= 3; ++page) {
             pdf.set_page(page);
-            const auto font = pdf.standard_font(sc::standard_font::face::helvetica); // in each page's resources
+            const auto font = pdf.standard_font(sc::graphics::standard_font::face::helvetica); // in each page's resources
             auto &c = pdf.page_content();
             c.begin_text();
             c.font(font, 12);

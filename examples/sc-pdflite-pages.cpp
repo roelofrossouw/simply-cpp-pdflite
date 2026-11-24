@@ -10,7 +10,7 @@
 #include <sc/core/params.h>
 #include <sc/core/sc.h>
 
-#include <sc/core/distance.h>
+#include <sc/geometry/distance.h>
 #include <sc/pdflite/pdflite.h>
 #include <sc/graphics/standard_font.h>
 
@@ -32,7 +32,7 @@ namespace {
         std::ostringstream size;
         const auto in_mm = pdf.size().in<mm>();
         size << paper << ": " << in_mm.width() << " x " << in_mm.height();
-        const sc::standard_font font{sc::standard_font::face::helvetica_bold};
+        const sc::graphics::standard_font font{sc::graphics::standard_font::face::helvetica_bold};
         const double text_size = 28;
         page.begin_text();
         page.font(pdf.standard_font(font.which()), text_size);
@@ -58,18 +58,18 @@ int main(int argc, char **argv) {
 
         // [readme]
         sc::console::heading("Page 1: the document's size, A4 portrait");
-        sc::pdflite::document pdf{output, sc::page_size::A4};
+        sc::pdflite::document pdf{output, sc::graphics::page_size::A4};
         SC_SHOW(pdf.size().in<mm>()); // the current page's size, in mm
         frame_and_size(pdf, "A4 portrait");
 
         sc::console::heading("Page 2: a size of its own, A3 landscape (add_page(paper, orientation))");
-        SC_STEP(pdf.add_page(sc::page_size::A3, sc::orientation::landscape));
+        SC_STEP(pdf.add_page(sc::graphics::page_size::A3, sc::graphics::orientation::landscape));
         SC_SHOW(pdf.size().in<mm>()); // now page 2's
         frame_and_size(pdf, "A3 landscape");
 
         sc::console::heading("Links and bookmarks find each page's own size");
         pdf.set_page(1);
-        const auto font = pdf.standard_font(sc::standard_font::face::helvetica);
+        const auto font = pdf.standard_font(sc::graphics::standard_font::face::helvetica);
         auto &first = pdf.page_content();
         first.begin_text();
         first.font(font, 12);

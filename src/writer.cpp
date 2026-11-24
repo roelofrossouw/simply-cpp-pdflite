@@ -24,10 +24,10 @@ namespace sc::pdflite {
         // One pdflite::font serves every size of a face: keyed by family, weight, italic and style.
         std::map<std::tuple<std::string, int, bool, std::string>, pdflite::font> fonts;
         // Each bitmap read once, by its bytes (copies share them), held so their address isn't another's.
-        std::map<const std::string *, std::pair<sc::bitmap, std::shared_ptr<const pdflite::image> > > bitmaps;
+        std::map<const std::string *, std::pair<sc::graphics::bitmap, std::shared_ptr<const pdflite::image> > > bitmaps;
         std::map<std::filesystem::path, std::shared_ptr<const pdflite::image> > files;
 
-        impl(const std::filesystem::path &filename, const page_size size, const orientation turned) : document(filename, size, turned) {
+        impl(const std::filesystem::path &filename, const graphics::page_size size, const graphics::orientation turned) : document(filename, size, turned) {
         }
 
         void check_open() const {
@@ -40,7 +40,7 @@ namespace sc::pdflite {
         }
 
         // The installed font for spec; throws std::runtime_error when fontconfig finds none.
-        const pdflite::font &font(const sc::font &spec) {
+        const pdflite::font &font(const sc::graphics::font &spec) {
             const auto key = std::tuple{spec.family, spec.weight, spec.italic, spec.style};
             if (const auto found = fonts.find(key); found != fonts.end()) return found->second;
             return fonts.emplace(key, pdflite::font{spec}).first->second;
@@ -53,7 +53,7 @@ namespace sc::pdflite {
         }
 
         // Fills (by the fill's rule) and/or strokes shape; whichever is none is left out.
-        void paint(const sc::appearance &look, const sc::path &shape) {
+        void paint(const sc::graphics::appearance &look, const sc::path &shape) {
             const auto &stroke = look.stroke();
             const auto &fill = look.fill();
             auto &page = content();
@@ -66,7 +66,7 @@ namespace sc::pdflite {
                 page.stroke_colour(stroke.colour().red(), stroke.colour().green(), stroke.colour().blue());
             }
             page.path(shape);
-            page.paint(filled, stroked, fill.rule() == fill_rule::even_odd);
+            page.paint(filled, stroked, fill.rule() == graphics::fill_rule::even_odd);
             page.restore();
         }
 
@@ -78,11 +78,11 @@ namespace sc::pdflite {
         }
     };
 
-    writer::writer(const std::filesystem::path &filename, const page_size size, const orientation turned)
+    writer::writer(const std::filesystem::path &filename, const graphics::page_size size, const graphics::orientation turned)
         : impl_(std::make_unique<impl>(filename, size, turned)) {
     }
 
-    writer::writer(const std::filesystem::path &filename, const page_size size, const orientation turned, const protection &locked)
+    writer::writer(const std::filesystem::path &filename, const graphics::page_size size, const graphics::orientation turned, const protection &locked)
         : impl_(std::make_unique<impl>(filename, size, turned)) {
         if (locked.user_password.empty() && locked.owner_password.empty()) return;
         impl_->document.protect(locked);
@@ -138,7 +138,7 @@ namespace sc::pdflite {
             std::vector<piece> out;
             for (std::size_t i = 0; i < text.size();) {
                 const auto [code, length, valid] = utf8::decode(text, i);
-                const auto byte = standard_font::encode(code);
+                const auto byte = graphics::standard_font::encode(code);
                 const bool encoded = byte.has_value();
                 if (out.empty() || out.back().encoded != encoded) out.push_back({{}, {}, encoded});
                 if (encoded) out.back().text += *byte;
@@ -150,9 +150,9 @@ namespace sc::pdflite {
         }
     }
 
-    double writer::measure_width(const text &sample) {
+    double writer::measure_width(const graphics::text &sample) {
         if (impl_->builtin) {
-            if (const auto standard = standard_font::of(sample.font)) {
+            if (const auto standard = graphics::standard_font::of(sample.font)) {
                 double width = 0;
                 for (const auto &each: pieces_of(sample.content))
                     width += each.encoded ? standard->width(each.utf8, sample.font.size)
@@ -163,15 +163,15 @@ namespace sc::pdflite {
         return impl_->font(sample.font).width(sample.content, sample.font.size).points();
     }
 
-    double writer::measure_x_height(const sc::font &font) {
+    double writer::measure_x_height(const sc::graphics::font &font) {
         if (impl_->builtin)
-            if (const auto standard = standard_font::of(font)) return standard->x_height(font.size);
+            if (const auto standard = graphics::standard_font::of(font)) return standard->x_height(font.size);
         return impl_->font(font).x_height(font.size).points();
     }
 
-    double writer::measure_cap_height(const sc::font &font) {
+    double writer::measure_cap_height(const sc::graphics::font &font) {
         if (impl_->builtin)
-            if (const auto standard = standard_font::of(font)) return standard->cap_height(font.size);
+            if (const auto standard = graphics::standard_font::of(font)) return standard->cap_height(font.size);
         return impl_->font(font).cap_height(font.size).points();
     }
 
@@ -181,14 +181,14 @@ namespace sc::pdflite {
 
     void writer::image_resolution(const double pixels_per_inch) { impl_->document.image_resolution(pixels_per_inch); }
 
-    void writer::paint_text(const text &sample, const sc::fill &fill) {
+    void writer::paint_text(const graphics::text &sample, const sc::graphics::fill &fill) {
         auto &content = impl_->content();
         auto &document = impl_->document;
         content.save();
         impl_->set_alpha(content, fill.colour().alpha(), 1);
         content.fill_colour(fill.colour().red(), fill.colour().green(), fill.colour().blue());
         content.begin_text();
-        const auto standard = impl_->builtin ? standard_font::of(sample.font) : std::nullopt;
+        const auto standard = impl_->builtin ? graphics::standard_font::of(sample.font) : std::nullopt;
         if (standard) {
             // The built-in font for what Windows-1252 has, placed by Adobe's widths; the installed
             // font (embedded) for the rest.
@@ -217,19 +217,19 @@ namespace sc::pdflite {
         content.restore();
     }
 
-    void writer::paint_line(const line &shape, const sc::stroke &stroke) {
+    void writer::paint_line(const line &shape, const sc::graphics::stroke &stroke) {
         impl_->paint(stroke, to_path(shape));
     }
 
-    void writer::paint_rounded_rect(const rounded_rect &shape, const sc::appearance &look) {
+    void writer::paint_rounded_rect(const rounded_rect &shape, const sc::graphics::appearance &look) {
         impl_->paint(look, to_path(shape));
     }
 
-    void writer::paint_circle(const circle &shape, const sc::appearance &look) {
+    void writer::paint_circle(const circle &shape, const sc::graphics::appearance &look) {
         impl_->paint(look, to_path(shape));
     }
 
-    void writer::paint_polygon(const polygon &shape, const sc::appearance &look) {
+    void writer::paint_polygon(const polygon &shape, const sc::graphics::appearance &look) {
         impl_->paint(look, to_path(shape));
     }
 
@@ -251,7 +251,7 @@ namespace sc::pdflite {
         impl_->content().draw(impl_->document.image(picture, sc::size_<distance>{w, h}), where);
     }
 
-    void writer::paint_bitmap(const bitmap &picture, const transform &placement) {
+    void writer::paint_bitmap(const graphics::bitmap &picture, const transform &placement) {
         impl_->check_open();
         auto found = impl_->bitmaps.find(&picture.bytes());
         if (found == impl_->bitmaps.end())
@@ -261,7 +261,7 @@ namespace sc::pdflite {
         impl_->content().draw(impl_->document.image(*found->second.second, shown), placement);
     }
 
-    void writer::paint_path(const path &shape, const sc::appearance &look) {
+    void writer::paint_path(const path &shape, const sc::graphics::appearance &look) {
         impl_->paint(look, shape);
     }
 

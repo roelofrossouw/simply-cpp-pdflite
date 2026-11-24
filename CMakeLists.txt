@@ -9,9 +9,10 @@ get_sc_version()
 message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
 # sc::distance (distance.h), and points and sizes of distances with in<Unit>() since 1.17.0.
-find_or_install_package(sc-core simply-cpp-dev simply-cpp 3.0.0)
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 4.0.0)
+find_or_install_package(sc-geometry simply-cpp-geometry-dev simply-cpp-geometry 1.0.0)
 # sc::canvas (writer), sc::standard_font (the built-in fonts by face since 6.2.0) and paper sizes in millimetres.
-find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 7.0.0)
+find_or_install_package(sc-graphics simply-cpp-graphics-dev simply-cpp-graphics 8.0.0)
 # Streams are compressed with zlib; embedded fonts are read by FreeType (as sc-graphics reads them).
 find_package(ZLIB REQUIRED)
 config_or_install_package(freetype2 libfreetype-dev freetype)
@@ -24,8 +25,8 @@ set(SOURCE_LINK_LIBRARIES)
 
 add_sc_object(pdflite
         SOURCES src/object.cpp src/file.cpp src/content.cpp src/document.cpp src/jpeg.cpp src/png.cpp src/svg.cpp src/font.cpp src/encryption.cpp src/reader.cpp src/merge.cpp src/writer.cpp
-        LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB PkgConfig::freetype2 OpenSSL::Crypto
-        PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-graphics ZLIB::ZLIB OpenSSL::Crypto)
+        LINK_LIBRARIES sc::sc-core sc::sc-geometry sc::sc-graphics ZLIB::ZLIB PkgConfig::freetype2 OpenSSL::Crypto
+        PUBLIC_LINK_LIBRARIES sc::sc-core sc::sc-geometry sc::sc-graphics ZLIB::ZLIB OpenSSL::Crypto)
 
 # version(), and the Producer files are written with by default.
 target_compile_definitions(sc-obj-pdflite PRIVATE SC_PDFLITE_VERSION="${SC_VERSION}")
@@ -76,4 +77,4 @@ if (sc-image_FOUND AND SC_BUILD_EXAMPLES)
 endif ()
 
 package_sc_module(
-        DEV_DEPENDS "simply-cpp-dev (>= 3.0.0~)" "simply-cpp-graphics-dev (>= 7.0.0~)" zlib1g-dev libfreetype-dev libssl-dev)
+        DEV_DEPENDS "simply-cpp-dev (>= 4.0.0~)" "simply-cpp-geometry-dev (>= 1.0.0~)" "simply-cpp-graphics-dev (>= 8.0.0~)" zlib1g-dev libfreetype-dev libssl-dev)

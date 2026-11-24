@@ -243,7 +243,7 @@ namespace sc::pdflite {
         return out;
     }
 
-    font::font(const sc::font &spec) {
+    font::font(const sc::graphics::font &spec) {
         const auto face = spec.face();
         if (!face) throw std::runtime_error("sc::pdflite: no installed font for " + spec.family);
         *this = load(face->file(), face->index());

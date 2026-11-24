@@ -214,16 +214,16 @@ int main() {
         document pdf{fonts_file, {595.2756, 841.8898}}; // any size in points: A4 to the hundredth of a millimetre
         auto &page = pdf.page_content();
         double y = 42; // from the top
-        for (const auto font: sc::standard_font::faces) {
+        for (const auto font: sc::graphics::standard_font::faces) {
             const auto resource = pdf.standard_font(font);
             page.begin_text();
             page.font(resource, 14);
             page.text_position(50, y);
-            page.show(*document::win_ansi(std::string{sc::standard_font::name(font)} + ": Caf\xC3\xA9 (\xE2\x82\xAC 5) \\ fin"));
+            page.show(*document::win_ansi(std::string{sc::graphics::standard_font::name(font)} + ": Caf\xC3\xA9 (\xE2\x82\xAC 5) \\ fin"));
             page.end_text();
             y += 24;
         }
-        CHECK_EQ(pdf.standard_font(sc::standard_font::face::helvetica), std::string{"F1"}); // the same font, the same name
+        CHECK_EQ(pdf.standard_font(sc::graphics::standard_font::face::helvetica), std::string{"F1"}); // the same font, the same name
         pdf.info("Title", "Built-in fonts \xE2\x80\x93 a test"); // an en dash: UTF-16
         pdf.info("Author", "simply-cpp");
         pdf.close();
@@ -247,7 +247,7 @@ int main() {
     SECTION("Pages, drawing on an earlier one again, shapes and clipping");
     const auto pages_file = output() / "pages.pdf";
     {
-        document pdf{pages_file, sc::page_size::letter}; // 612 x 792 points
+        document pdf{pages_file, sc::graphics::page_size::letter}; // 612 x 792 points
         pdf.add_page();
         pdf.add_page();
         CHECK_EQ(pdf.page_count(), std::size_t{3});
@@ -276,7 +276,7 @@ int main() {
         first.stroke();
         first.restore();
         pdf.set_page(3);
-        const auto font = pdf.standard_font(sc::standard_font::face::courier);
+        const auto font = pdf.standard_font(sc::graphics::standard_font::face::courier);
         auto &third = pdf.page_content();
         third.begin_text();
         third.font(font, 10);
@@ -329,7 +329,7 @@ int main() {
         page.line_width(sc::dist::mm(0.5));
         page.rectangle(sc::dist::mm(10), sc::dist::mm(10), sc::dist::inch(1), 72); // mixed with a plain number of points
         page.stroke();
-        const auto font = pdf.standard_font(sc::standard_font::face::helvetica);
+        const auto font = pdf.standard_font(sc::graphics::standard_font::face::helvetica);
         page.begin_text();
         page.font(font, sc::dist::mm(5));
         page.text_position(sc::dist::inch(1), sc::dist::inch(1));
@@ -355,10 +355,10 @@ int main() {
     SECTION("Pages of different sizes in one file");
     const auto sizes_file = output() / "sizes.pdf";
     {
-        document pdf{sizes_file, sc::page_size::A4};
+        document pdf{sizes_file, sc::graphics::page_size::A4};
         CHECK_NEAR(pdf.size().width(), 595.2756, 1e-4);
         pdf.link(sc::rect{72, 72, 200, 20}, 2);            // to the top of page 2
-        pdf.add_page(sc::page_size::A3, sc::orientation::landscape);
+        pdf.add_page(sc::graphics::page_size::A3, sc::graphics::orientation::landscape);
         CHECK_NEAR(pdf.size().width(), 1190.5512, 1e-4);          // the current page's size
         CHECK_NEAR(pdf.size().height(), 841.8898, 1e-4);
         pdf.page_content().rectangle(0, 0, pdf.size().width(), 100); // from its own top-left corner
@@ -432,7 +432,7 @@ int main() {
         const auto photo = jpeg::load(SC_PDFLITE_TEST_PHOTO);
         CHECK_EQ(photo.size().width(), 960);
         CHECK_EQ(photo.size().height(), 640);
-        document pdf{images_file, sc::page_size::A4};
+        document pdf{images_file, sc::graphics::page_size::A4};
         auto &page = pdf.page_content();
         const auto name = pdf.image(photo);
         CHECK_EQ(name, std::string{"Im1"});
@@ -475,7 +475,7 @@ int main() {
             return out;
         };
         const fs::path folder = SC_PDFLITE_TEST_PNGS;
-        document pdf{pngs_file, sc::page_size::A4};
+        document pdf{pngs_file, sc::graphics::page_size::A4};
         double y = 20;
         std::map<std::string, png> pictures;
         for (const char *name: {"rgb8", "rgb16", "grey1", "grey4", "palette4", "rgba8", "grey-alpha16", "palette-alpha", "grey-key",
@@ -560,7 +560,7 @@ int main() {
         // Two loads of one file aren't copies, but their bytes are the same: one image.
         const auto same_file = output() / "same-bytes.pdf";
         {
-            document pdf{same_file, sc::page_size::A4};
+            document pdf{same_file, sc::graphics::page_size::A4};
             const auto first = png::load(folder / "rgb8.png"), second = png::load(folder / "rgb8.png");
             CHECK(first.identity() != second.identity());
             CHECK_EQ(pdf.image(first), std::string{"Im1"});
@@ -585,7 +585,7 @@ int main() {
 
         const auto reduced_file = output() / "reduced.pdf";
         {
-            document pdf{reduced_file, sc::page_size::A4};
+            document pdf{reduced_file, sc::graphics::page_size::A4};
             CHECK_THROWS_AS(pdf.image_resolution(-1), std::invalid_argument);
             pdf.image_resolution(72); // a pixel a point
             auto &page = pdf.page_content();
@@ -636,7 +636,7 @@ int main() {
         const auto drawing = svg::parse(text);
         CHECK_EQ(drawing.size().width(), 200.0);
         CHECK_EQ(drawing.size().height(), 100.0);
-        document pdf{svg_file, sc::page_size::A4};
+        document pdf{svg_file, sc::graphics::page_size::A4};
         const auto name = pdf.image(drawing);
         CHECK_EQ(name, std::string{"Fm1"});
         pdf.page_content().draw(name, sc::rect{50, 50, 400, 200});
@@ -685,7 +685,7 @@ int main() {
         const auto check = [&](const std::string &what, const std::filesystem::path &font_file, const long index, const std::string &text) {
             const auto out = output() / ("font-" + what + ".pdf");
             {
-                document pdf{out, sc::page_size::A5};
+                document pdf{out, sc::graphics::page_size::A5};
                 const auto embedded = font::load(font_file, index);
                 auto &page = pdf.page_content();
                 page.begin_text();
@@ -732,9 +732,9 @@ int main() {
             FT_Done_FreeType(library);
         };
 
-        if (const auto face = sc::font{"sans-serif", 12}.face()) {
+        if (const auto face = sc::graphics::font{"sans-serif", 12}.face()) {
             check("installed", face->file(), face->index(), "Hello, caf\u00e9 \u20ac \u0416!");
-            const font embedded{sc::font{"sans-serif", 12}};
+            const font embedded{sc::graphics::font{"sans-serif", 12}};
             CHECK(embedded.covers("Hello"));
             CHECK(!embedded.covers("\U0010FFFD"));                                // a private-use code point: no glyph
             CHECK_EQ(embedded.encode("HH").size(), std::size_t{4});               // two bytes a glyph
@@ -786,8 +786,8 @@ int main() {
 
         const auto protected_file = output() / "protected.pdf";
         {
-            document pdf{protected_file, sc::page_size::A5};
-            const auto font = pdf.standard_font(sc::standard_font::face::helvetica);
+            document pdf{protected_file, sc::graphics::page_size::A5};
+            const auto font = pdf.standard_font(sc::graphics::standard_font::face::helvetica);
             auto &page = pdf.page_content();
             page.begin_text();
             page.font(font, 14);
@@ -847,7 +847,7 @@ int main() {
         // Only an owner password: anyone opens it, the permissions apply.
         const auto owner_file = output() / "owner-only.pdf";
         {
-            document pdf{owner_file, sc::page_size::A5};
+            document pdf{owner_file, sc::graphics::page_size::A5};
             pdf.protect({"", "admin", permissions{}});
             pdf.close();
         }
@@ -861,7 +861,7 @@ int main() {
     const auto links_file = output() / "links.pdf";
     {
         document pdf{links_file, {595.2756, 841.8898}};
-        const auto font = pdf.standard_font(sc::standard_font::face::helvetica);
+        const auto font = pdf.standard_font(sc::graphics::standard_font::face::helvetica);
         auto &first = pdf.page_content();
         first.begin_text();
         first.font(font, 12);
@@ -916,7 +916,7 @@ int main() {
     SECTION("Mistakes");
     {
         {
-            document landscape{fs::temp_directory_path() / "sc-pdflite-landscape.pdf", sc::page_size::A5, sc::orientation::landscape};
+            document landscape{fs::temp_directory_path() / "sc-pdflite-landscape.pdf", sc::graphics::page_size::A5, sc::graphics::orientation::landscape};
             CHECK_NEAR(landscape.size().width(), 595.2756, 1e-4); // A5 turned: 210 x 148 mm
             CHECK_NEAR(landscape.size().height(), 419.5276, 1e-4);
             CHECK_EQ(sc::console::format(static_cast<sc::dist::mm>(landscape.size().height())), std::string{"148mm"});

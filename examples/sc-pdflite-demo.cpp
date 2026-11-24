@@ -1,5 +1,5 @@
 // Writes a bare-bones PDF with sc-pdflite, simply-cpp's own writer: text in PDF's built-in fonts
-// (measured with sc::standard_font, so a line can be centred), boxes, a curve and a clipped
+// (measured with sc::graphics::standard_font, so a line can be centred), boxes, a curve and a clipped
 // drawing, on two pages. Positions are from the top-left corner, y down, as on sc-graphics' canvas. Each line shows a call and what it returned.
 
 #include <filesystem>
@@ -9,7 +9,7 @@
 #include <sc/core/params.h>
 #include <sc/core/sc.h>
 
-#include <sc/core/distance.h>
+#include <sc/geometry/distance.h>
 #include <sc/pdflite/pdflite.h>
 #include <sc/graphics/standard_font.h>
 
@@ -32,17 +32,17 @@ int main(int argc, char **argv) {
 
         // [readme]
         sc::console::heading("A document of A4 pages: sc-graphics' paper sizes, or any size in points");
-        sc::pdflite::document pdf{output, sc::page_size::A4};
-        sc::console::step("sc::pdflite::document pdf{output, sc::page_size::A4};   // " + output.string());
+        sc::pdflite::document pdf{output, sc::graphics::page_size::A4};
+        sc::console::step("sc::pdflite::document pdf{output, sc::graphics::page_size::A4};   // " + output.string());
         SC_SHOW(pdf.size());          // distances, in points (1/72 inch)
         SC_SHOW(pdf.size().in<mm>()); // the same, in millimetres
 
         sc::console::heading("Text: a built-in font, then BT ... ET");
         auto &page = pdf.page_content();
-        const auto bold = pdf.standard_font(sc::standard_font::face::helvetica_bold);
+        const auto bold = pdf.standard_font(sc::graphics::standard_font::face::helvetica_bold);
         SC_SHOW(bold); // its name in the page's resources
         const std::string heading = "simply-cpp pdflite";
-        const sc::standard_font metrics{sc::standard_font::face::helvetica_bold}; // Adobe's metrics for it
+        const sc::graphics::standard_font metrics{sc::graphics::standard_font::face::helvetica_bold}; // Adobe's metrics for it
         const sc::distance width = metrics.width(heading, 28);
         SC_SHOW(width); // Adobe's widths: lines are measured as readers draw them
         page.begin_text();
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
         page.show(*sc::pdflite::document::win_ansi(heading));
         page.end_text();
 
-        const auto serif = pdf.standard_font(sc::standard_font::face::times_roman);
+        const auto serif = pdf.standard_font(sc::graphics::standard_font::face::times_roman);
         page.begin_text();
         page.font(serif, 13);
         page.text_position(inch(1), 122); // a unit from sc::dist, or a plain number of points
@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
         sc::console::heading("A second page, and the document's information");
         SC_STEP(pdf.add_page());
         auto &second = pdf.page_content();
-        const auto mono = pdf.standard_font(sc::standard_font::face::courier);
+        const auto mono = pdf.standard_font(sc::graphics::standard_font::face::courier);
         second.begin_text();
         second.font(mono, 11);
         second.text_position(72, 82);

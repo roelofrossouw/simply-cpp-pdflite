@@ -62,8 +62,8 @@ namespace sc::pdflite {
         }
     }
 
-    document::document(const std::filesystem::path &path, const sc::page_size paper, const sc::orientation turned)
-        : document(path, sc::page_dimensions(paper, turned)) {}
+    document::document(const std::filesystem::path &path, const sc::graphics::page_size paper, const sc::graphics::orientation turned)
+        : document(path, sc::graphics::page_dimensions(paper, turned)) {}
 
     array document::rect_of(const sc::rect &where) const {
         if (where.width() < 0 || where.height() < 0) throw std::invalid_argument("sc::pdflite: an area with a negative size");
@@ -93,8 +93,8 @@ namespace sc::pdflite {
         current_ = pages_.size() - 1;
     }
 
-    void document::add_page(const sc::page_size paper, const sc::orientation turned) {
-        add_page(sc::page_dimensions(paper, turned));
+    void document::add_page(const sc::graphics::page_size paper, const sc::graphics::orientation turned) {
+        add_page(sc::graphics::page_dimensions(paper, turned));
     }
 
     void document::set_page(const std::size_t page) {
@@ -108,7 +108,7 @@ namespace sc::pdflite {
         return pages_[current_].content;
     }
 
-    std::string document::standard_font(const sc::standard_font::face which) {
+    std::string document::standard_font(const sc::graphics::standard_font::face which) {
         check_open();
         auto &page = pages_[current_];
         return page_name(page.fonts, which, [&] { if (!fonts_.contains(which)) fonts_[which] = file_.allocate(); },
@@ -182,7 +182,7 @@ namespace sc::pdflite {
     std::optional<std::string> document::win_ansi(const std::string_view utf8) {
         std::string out;
         for (const char32_t code: code_points(utf8)) {
-            const auto byte = sc::standard_font::encode(code);
+            const auto byte = sc::graphics::standard_font::encode(code);
             if (!byte) return std::nullopt;
             out += *byte;
         }
@@ -324,9 +324,9 @@ namespace sc::pdflite {
         file_.write(pages_id_, dictionary{{"Type", name{"Pages"}}, {"Kids", kids}, {"Count", pages_.size()}});
 
         // The standard Type 1 fonts (9.6.2.2): Symbol and ZapfDingbats, with their own encodings,
-        // aren't among sc::standard_font's faces.
+        // aren't among sc::graphics::standard_font's faces.
         for (const auto &[which, id]: fonts_)
-            file_.write(id, dictionary{{"Type", name{"Font"}}, {"Subtype", name{"Type1"}}, {"BaseFont", name{sc::standard_font::name(which)}},
+            file_.write(id, dictionary{{"Type", name{"Font"}}, {"Subtype", name{"Type1"}}, {"BaseFont", name{sc::graphics::standard_font::name(which)}},
                                        {"Encoding", name{"WinAnsiEncoding"}}});
 
         for (const auto &[alphas, id]: states_)

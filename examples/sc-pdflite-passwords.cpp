@@ -9,7 +9,7 @@
 #include <sc/core/params.h>
 #include <sc/core/sc.h>
 
-#include <sc/core/distance.h>
+#include <sc/geometry/distance.h>
 #include <sc/pdflite/pdflite.h>
 
 // The units by their plain names: mm(10), inch(1), pdf.size().in<mm>().
@@ -17,7 +17,7 @@ using namespace sc::dist;
 
 namespace {
     void page_of_text(sc::pdflite::document &pdf, const std::string &line) {
-        const sc::pdflite::font font{sc::font{"sans-serif", 14}};
+        const sc::pdflite::font font{sc::graphics::font{"sans-serif", 14}};
         auto &page = pdf.page_content();
         page.begin_text();
         page.font(pdf.font(font), 14);
@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
         // [readme]
         sc::console::heading("A password to open it: everything in the file is encrypted");
         const auto locked = folder / "sc-pdflite-locked.pdf";
-        sc::pdflite::document pdf{locked, sc::page_size::A5};
+        sc::pdflite::document pdf{locked, sc::graphics::page_size::A5};
         page_of_text(pdf, "Opened with the password “open sesame”.");
         pdf.info("Title", "sc-pdflite: a password to open");
         pdf.info("Author", "Roelof Rossouw");
@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
 
         sc::console::heading("Anyone may open it, and print; the rest takes the owner's password");
         const auto print_only = folder / "sc-pdflite-print-only.pdf";
-        sc::pdflite::document open{print_only, sc::page_size::A5};
+        sc::pdflite::document open{print_only, sc::graphics::page_size::A5};
         page_of_text(open, "Anyone can open and print this; copying needs “admin”.");
         open.info("Title", "sc-pdflite: print only");
         open.info("Author", "Roelof Rossouw");
